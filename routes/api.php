@@ -113,6 +113,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::get('products/{product}', [ProductDetailsController::class, 'show'])
         ->whereNumber('product')
         ->name('products.show');
+    Route::get('products/{product}/reviews', [ProductDetailsController::class, 'reviews'])
+        ->whereNumber('product')
+        ->name('products.reviews');
 
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
     Route::get('categories/{category}/listings', [CategoryController::class, 'listings'])->name('categories.listings');

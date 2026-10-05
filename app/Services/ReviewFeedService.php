@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CustomOrder;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Review;
 use App\Models\StoreReview;
 use App\Models\User;
@@ -87,6 +88,25 @@ class ReviewFeedService
         return [
             'summary' => $this->summaryOf((clone $query), 'store_rating'),
             'reviews' => $this->page($query->with(['user:id,name,avatar', 'reviewable']), 'store_rating', 'store_comment', $filters, $perPage),
+        ];
+    }
+
+    /**
+     * Public reviews of a product: the products rating / comment of every
+     * reviewed store order it was in (the same set that makes up its rating_avg).
+     *
+     * @param  array{stars?: ?int, with_comment?: bool, sort?: string}  $filters
+     * @return array{summary: array<string, mixed>, reviews: LengthAwarePaginator}
+     */
+    public function forProduct(Product $product, array $filters, int $perPage): array
+    {
+        $query = Review::query()
+            ->where('reviewable_type', Review::TYPE_ORDER)
+            ->whereIn('reviewable_id', fn ($q) => $q->select('order_id')->from('order_items')->where('product_id', $product->id));
+
+        return [
+            'summary' => $this->summaryOf((clone $query), 'products_rating'),
+            'reviews' => $this->page($query->with('user:id,name,avatar'), 'products_rating', 'products_comment', $filters, $perPage),
         ];
     }
 
