@@ -24,6 +24,9 @@ class ShopperOrderInvoiceTest extends TestCase
     {
         parent::setUp();
 
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+
         $this->shopper = User::factory()->shopper()->create();
         Storage::fake('public');
         Queue::fake([SendPushNotification::class]);

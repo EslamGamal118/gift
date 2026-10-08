@@ -89,6 +89,25 @@ class CustomOrderFactory extends Factory
         ]);
     }
 
+    /**
+     * Purchased and paid by the customer; `$status` is where its delivery is.
+     */
+    public function paid(string $status = CustomOrder::STATUS_PAID): static
+    {
+        return $this->state(fn () => [
+            'status'         => $status,
+            'submitted_at'   => now()->subDays(2),
+            'accepted_at'    => now()->subDays(2),
+            'started_at'     => now()->subDay(),
+            'purchased_at'   => now()->subDay(),
+            'final_amount'   => 250,
+            'total_amount'   => 287.5,
+            'payment_status' => CustomOrder::PAYMENT_PAID,
+            'payment_method' => 'alrajhi',
+            'paid_at'        => now()->subHours(3),
+        ]);
+    }
+
     public function cancelled(): static
     {
         return $this->state(fn () => [

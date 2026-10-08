@@ -64,31 +64,18 @@ class ShopperOrderDetailResource extends JsonResource
             // Where to deliver (عنوان التسليم), set by the customer
             'delivery'        => [
                 'address_id'      => $this->delivery_address_id,
-                'recipient_name'  => $this->delivery_name,
-                'recipient_phone' => $this->delivery_phone,
-                'location_name'   => $this->delivery_location_name,
                 'city'            => $this->delivery_city,
                 'district'        => $this->delivery_district,
-                'street'          => $this->delivery_street,
-                'building_number' => $this->delivery_building_number,
                 'full_address'    => $this->delivery_address,
-                'latitude'        => $this->delivery_latitude !== null ? (float) $this->delivery_latitude : null,
-                'longitude'       => $this->delivery_longitude !== null ? (float) $this->delivery_longitude : null,
-                'date'            => $this->delivery_date?->toDateString(),
-                'slot_label'      => $this->delivery_slot_label,
-                'at'              => ($this->delivery_at ?? $this->delivery_window_start)?->toIso8601String(),
-                'window_end'      => $this->delivery_window_end?->toIso8601String(),
-                // Delivery instructions entered when the customer confirmed
-                'notes'           => $this->confirmation_notes,
             ],
             'notes'           => $this->notes,
 
             'budget'          => $this->budget(),
-            'final_amount'    => $this->final_amount !== null ? Money::format($this->final_amount, $this->currency) : null,
 
             // Where the driver picks the items up (عنوان الاستلام), set with the invoice
             'pickup'          => $this->whenLoaded('pickupAddress', fn () => $this->pickupDetails()),
             'invoice'         => $this->invoiceDetails(),
+            'delivery_tracking' => $this->deliveryTracking(),
             'pricing'         => $this->pricing(),
 
             'items_count'     => (int) ($this->items_count ?? $this->items->count()),
@@ -96,23 +83,13 @@ class ShopperOrderDetailResource extends JsonResource
                 $this->items->each(fn ($item) => $item->setRelation('customOrder', $this->resource))
             )),
 
-            'timeline'        => [
-                'submitted_at' => $this->submitted_at?->toIso8601String(),
-                'assigned_at'  => $this->assigned_at?->toIso8601String(),
-                'accepted_at'  => $this->accepted_at?->toIso8601String(),
-                'started_at'   => $this->started_at?->toIso8601String(),
-                'purchased_at' => $this->purchased_at?->toIso8601String(),
-                'completed_at' => $this->completed_at?->toIso8601String(),
-                'paid_at'      => $this->paid_at?->toIso8601String(),
-                'cancelled_at' => $this->cancelled_at?->toIso8601String(),
-            ],
+          
             'cancellation'    => $this->when($this->status === CustomOrder::STATUS_CANCELLED, fn () => [
                 'by'     => $this->cancelled_by,
                 'reason' => $this->cancellation_reason,
             ]),
 
             'created_at'      => $this->created_at?->toIso8601String(),
-            'updated_at'      => $this->updated_at?->toIso8601String(),
         ];
     }
 }

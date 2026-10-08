@@ -26,7 +26,8 @@ class StoreOrderService
     /**
      * Status the store asks for (POST /store/orders/{order}/status) => workflow
      * action. Values follow the card badges; `send_to_captain` and
-     * `out_for_delivery` both hand the order to a captain.
+     * `out_for_delivery` both hand the order over for delivery: to the delivery
+     * company (Alshrouq) when enabled, else to the app's captains.
      */
     public const STATUS_ACTIONS = [
         'accepted' => OrderStateMachine::ACTION_ACCEPT,
@@ -43,6 +44,7 @@ class StoreOrderService
         protected NotificationService $notifications,
         protected CheckoutService $checkout,
         protected CaptainOrderFeed $captainFeed,
+        protected StoreOrderDeliveryService $delivery,
     ) {}
 
     /*
@@ -78,7 +80,7 @@ class StoreOrderService
 
         $result = ['all' => (int) $counts->sum(), 'active' => 0];
 
-        foreach ([Order::STATUS_PENDING, Order::STATUS_ACCEPTED, Order::STATUS_PROCESSING, Order::STATUS_READY, Order::STATUS_OUT_FOR_DELIVERY, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED] as $status) {
+        foreach ([Order::STATUS_PENDING, Order::STATUS_ACCEPTED, Order::STATUS_PROCESSING, Order::STATUS_READY, Order::STATUS_OUT_FOR_DELIVERY, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED, ...Order::DELIVERY_STATUSES] as $status) {
             $result[$status] = (int) ($counts[$status] ?? 0);
         }
 
@@ -201,13 +203,25 @@ class StoreOrderService
     }
 
     /**
-     * Release the order for delivery. The store never picks a captain: every
-     * active captain is told the order is available and one of them takes it
-     * from the captain app (which sets `captain_id`). Once the status is
-     * committed the order is written to the Firebase live feed, next to the push.
+     * Release the order for delivery.
+     *
+     * With the delivery company (Alshrouq) enabled, the order is created there
+     * and follows its statuses (StoreOrderDeliveryService); if Alshrouq refuses
+     * it the order stays `ready` (422).
+     *
+     * Otherwise the store never picks a captain: every active captain is told
+     * the order is available and one of them takes it from the captain app
+     * (which sets `captain_id`). Once the status is committed the order is
+     * written to the Firebase live feed, next to the push.
+     *
+     * @throws \App\Exceptions\DeliveryException
      */
     public function dispatchToCaptains(Order $order, User $store): Order
     {
+        if ($this->delivery->enabled()) {
+            return $this->delivery->dispatch($order, $store);
+        }
+
         $order = $this->transition($order, OrderStateMachine::ACTION_DISPATCH, $store);
 
         $this->captainFeed->publish($order);

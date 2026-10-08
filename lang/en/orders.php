@@ -13,6 +13,10 @@ return [
     'processing' => 'Order is now being prepared.',
     'ready'      => 'Order marked as ready.',
     'dispatched' => 'Order sent to the available captains for pickup.',
+    'dispatched_to_delivery' => 'Order sent to the delivery company; a driver will be assigned to pick it up.',
+    'delivery_failed' => 'The order could not be sent to the delivery company. Please try again.',
+    'delivery_store_location_required' => 'Set the store main branch location on the map before sending the order to the driver.',
+    'delivery_customer_location_required' => 'The customer address has no map location, so it cannot be sent to the delivery company.',
     'cancelled'  => 'Order cancelled.',
     'delivered'  => 'Order marked as delivered.',
 
@@ -33,6 +37,14 @@ return [
         'out_for_delivery' => 'Out for delivery',
         'delivered'        => 'Delivered',
         'cancelled'        => 'Cancelled',
+        'order_created' => 'Sent to the delivery company',
+        'pending_driver_acceptance' => 'Waiting for a driver',
+        'driver_accepted' => 'Driver assigned',
+        'pending_order_preparation' => 'Waiting for the store',
+        'arrived_to_pickup' => 'Driver at the store',
+        'order_picked_up' => 'On the way',
+        'arrived_to_dropoff' => 'Arrived',
+        'cancellation_processing' => 'Cancelling delivery',
     ],
 
     'actions' => [
@@ -49,6 +61,31 @@ return [
         'view_details' => 'Order details',
         'track'   => 'Track order',
         'details' => 'Order details',
+        'pay'     => 'Complete payment',
+        'cancel'  => 'Cancel order',
+        'contact_support' => 'Contact support',
+        'visit_store' => 'Visit store',
+    ],
+
+    // Payment summary (order details screen)
+    'summary' => [
+        'subtotal'     => 'Subtotal',
+        'delivery_fee' => 'Delivery fee',
+        'express_fee'  => 'Instant delivery fee',
+        'discount'     => 'Discount',
+        'tax'          => 'VAT (:rate%)',
+        'total'        => 'Total',
+        'free'         => 'Free',
+    ],
+
+    // "My orders" tabs and card location
+    'tabs' => [
+        'active'  => 'Active',
+        'history' => 'Previous',
+    ],
+    'location' => [
+        'full'     => ':city, :district',
+        'district' => ':district',
     ],
     'today'     => 'Today',
     'yesterday' => 'Yesterday',
@@ -71,6 +108,14 @@ return [
         'out_for_delivery' => ['label' => 'On the way', 'description' => 'Your order is on its way to you.'],
         'delivered'        => ['label' => 'Delivered', 'description' => 'Your order was delivered. Enjoy!'],
         'cancelled'        => ['label' => 'Cancelled', 'description' => 'This order was cancelled.'],
+        'order_created' => ['label' => 'Sent to the delivery company', 'description' => 'Your order was sent to the delivery company; a driver will be assigned shortly.'],
+        'pending_driver_acceptance' => ['label' => 'Waiting for a driver', 'description' => 'We are finding the nearest driver to pick up your order.'],
+        'driver_accepted' => ['label' => 'Driver assigned', 'description' => 'A driver accepted your order and is heading to the store.'],
+        'pending_order_preparation' => ['label' => 'Waiting for the store', 'description' => 'The driver is waiting to receive your order from the store.'],
+        'arrived_to_pickup' => ['label' => 'Driver at the store', 'description' => 'The driver arrived at the store to pick up your order.'],
+        'order_picked_up' => ['label' => 'On the way', 'description' => 'The driver picked up your order and is on the way to you.'],
+        'arrived_to_dropoff' => ['label' => 'Arrived', 'description' => 'The driver arrived at your location.'],
+        'cancellation_processing' => ['label' => 'Cancelling delivery', 'description' => 'The delivery of your order is being cancelled.'],
     ],
 
     // Store app: order badge, items count and details screen title

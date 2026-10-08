@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -42,6 +43,8 @@ use Illuminate\Support\Str;
  */
 class Gift extends Model
 {
+    use HasFactory;
+
     public const WHATSAPP_PENDING = 'pending';
 
     public const WHATSAPP_SENT = 'sent';

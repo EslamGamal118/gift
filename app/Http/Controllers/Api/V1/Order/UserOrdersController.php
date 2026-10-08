@@ -33,6 +33,7 @@ class UserOrdersController extends Controller
 
         return ApiResponse::success('messages.success', [
             'filter' => ['tab' => $request->tab(), 'search' => $request->search()],
+            'tabs'   => $this->orders->tabs($request->user(), UserOrderService::TYPE_STANDARD, $request->search()),
         ] + $this->paginated($paginator, UserOrderResource::collection($paginator)));
     }
 
@@ -42,16 +43,13 @@ class UserOrdersController extends Controller
      * The same payload as /orders/{id}, prefixed with `order_type` and `tab`.
      * (`?type=custom` still returns a custom order, for older app versions.)
      */
-    public function show(UserOrderShowRequest $request, int $id): JsonResponse
-    {
-        $type  = $request->type();
-        $order = $this->orders->findForCustomer($request->user(), $type, $id);
+   public function show(UserOrderShowRequest $request, int $id): JsonResponse
+{
+    $type  = $request->type();
+    $order = $this->orders->findForCustomer($request->user(), $type, $id);
 
-        $details = $order instanceof CustomOrder ? new CustomOrderResource($order) : new OrderDetailsResource($order);
+    $details = new OrderDetailsResource($order);
 
-        return ApiResponse::success('messages.success', [
-            'order_type' => $type,
-            'tab'        => UserOrderService::tabFor($type, $order->status),
-        ] + $details->resolve($request));
-    }
+    return ApiResponse::success('messages.success', $details->resolve($request));
+}
 }

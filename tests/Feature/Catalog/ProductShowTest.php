@@ -19,6 +19,14 @@ class ProductShowTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+    }
+
     protected const LAT = 24.7136;
     protected const LNG = 46.6753;
 

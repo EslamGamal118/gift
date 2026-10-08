@@ -32,6 +32,7 @@ class UserCustomOrdersController extends Controller
 
         return ApiResponse::success('messages.success', [
             'filter' => ['tab' => $request->tab(), 'search' => $request->search()],
+            'tabs'   => $this->orders->tabs($request->user(), UserOrderService::TYPE_CUSTOM, $request->search()),
         ] + $this->paginated($paginator, UserOrderResource::collection($paginator)));
     }
 

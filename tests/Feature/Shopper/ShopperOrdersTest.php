@@ -138,7 +138,7 @@ class ShopperOrdersTest extends TestCase
             ->assertJsonPath('data.counts.active', 3)
             ->assertJsonPath('data.counts.history', 1)
             ->assertJsonPath('data.counts.all', 4)
-            ->assertJsonPath('data.counts.by_status', ['new' => 3, 'accepted' => 0, 'in_progress' => 0, 'waiting_for_alternative' => 0, 'waiting_for_payment' => 0, 'completed' => 1, 'cancelled' => 0]);
+            ->assertJsonPath('data.counts.by_status', ['new' => 3, 'accepted' => 0, 'in_progress' => 0, 'waiting_for_alternative' => 0, 'waiting_for_payment' => 0, 'paid' => 0, 'order_created' => 0, 'pending_driver_acceptance' => 0, 'driver_accepted' => 0, 'pending_order_preparation' => 0, 'arrived_to_pickup' => 0, 'order_picked_up' => 0, 'arrived_to_dropoff' => 0, 'completed' => 1, 'cancellation_processing' => 0, 'cancelled' => 0]);
     }
 
     public function test_only_shoppers_can_list(): void

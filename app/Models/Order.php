@@ -84,6 +84,48 @@ class Order extends Model implements Payable
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    // Delivery by the delivery company (Alshrouq), between `ready` and `delivered`
+    // (same values as on custom orders; see canMoveDeliveryTo())
+    public const STATUS_ORDER_CREATED = 'order_created';
+
+    public const STATUS_PENDING_DRIVER_ACCEPTANCE = 'pending_driver_acceptance';
+
+    public const STATUS_DRIVER_ACCEPTED = 'driver_accepted';
+
+    public const STATUS_PENDING_ORDER_PREPARATION = 'pending_order_preparation';
+
+    public const STATUS_ARRIVED_TO_PICKUP = 'arrived_to_pickup';
+
+    public const STATUS_ORDER_PICKED_UP = 'order_picked_up';
+
+    public const STATUS_ARRIVED_TO_DROPOFF = 'arrived_to_dropoff';
+
+    public const STATUS_CANCELLATION_PROCESSING = 'cancellation_processing';
+
+    /**
+     * Statuses of an order with the delivery company, not finished yet.
+     */
+    public const DELIVERY_STATUSES = [
+        self::STATUS_ORDER_CREATED, self::STATUS_PENDING_DRIVER_ACCEPTANCE, self::STATUS_DRIVER_ACCEPTED,
+        self::STATUS_PENDING_ORDER_PREPARATION, self::STATUS_ARRIVED_TO_PICKUP, self::STATUS_ORDER_PICKED_UP,
+        self::STATUS_ARRIVED_TO_DROPOFF, self::STATUS_CANCELLATION_PROCESSING,
+    ];
+
+    /**
+     * From handing the order to the delivery company to the door, in order.
+     * Delivered by it, the order ends `delivered` like any other.
+     */
+    public const DELIVERY_FLOW = [
+        self::STATUS_READY, self::STATUS_ORDER_CREATED, self::STATUS_PENDING_DRIVER_ACCEPTANCE,
+        self::STATUS_DRIVER_ACCEPTED, self::STATUS_PENDING_ORDER_PREPARATION, self::STATUS_ARRIVED_TO_PICKUP,
+        self::STATUS_ORDER_PICKED_UP, self::STATUS_ARRIVED_TO_DROPOFF, self::STATUS_DELIVERED,
+    ];
+
+    /**
+     * On the road to the customer (captain or delivery company).
+     */
+    public const ON_THE_WAY_STATUSES = [self::STATUS_OUT_FOR_DELIVERY, self::STATUS_ORDER_PICKED_UP, self::STATUS_ARRIVED_TO_DROPOFF];
+
     /**
      * Who ended the order (orders.cancelled_by / order_status_histories.actor_type).
      */
@@ -95,11 +137,14 @@ class Order extends Model implements Payable
 
     public const ACTOR_SYSTEM = 'system';
 
+    public const ACTOR_DELIVERY = 'delivery';   // orders.cancelled_by only: the delivery company
+
     /**
      * Statuses the store still has to act on or is working through.
      */
     public const ACTIVE_STATUSES = [
         self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_PROCESSING, self::STATUS_READY, self::STATUS_OUT_FOR_DELIVERY,
+        ...self::DELIVERY_STATUSES,
     ];
 
     /**
@@ -135,6 +180,15 @@ class Order extends Model implements Payable
         self::STATUS_OUT_FOR_DELIVERY => 'out_for_delivery',
         self::STATUS_DELIVERED => 'completed',
         self::STATUS_CANCELLED => 'cancelled',
+        // With the delivery company: waiting for its driver, then on the way
+        self::STATUS_ORDER_CREATED => 'ready_for_pickup',
+        self::STATUS_PENDING_DRIVER_ACCEPTANCE => 'ready_for_pickup',
+        self::STATUS_DRIVER_ACCEPTED => 'ready_for_pickup',
+        self::STATUS_PENDING_ORDER_PREPARATION => 'ready_for_pickup',
+        self::STATUS_ARRIVED_TO_PICKUP => 'ready_for_pickup',
+        self::STATUS_ORDER_PICKED_UP => 'out_for_delivery',
+        self::STATUS_ARRIVED_TO_DROPOFF => 'out_for_delivery',
+        self::STATUS_CANCELLATION_PROCESSING => 'out_for_delivery',
     ];
 
     // Gateways
@@ -199,6 +253,9 @@ class Order extends Model implements Payable
         'cancellation_reason',
         'cancelled_by',
         'cancelled_at',
+        'delivery_reference',
+        'delivery_status',
+        'delivery_updated_at',
     ];
 
     /**
@@ -229,6 +286,7 @@ class Order extends Model implements Payable
         'dispatched_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'delivery_updated_at' => 'datetime',
     ];
 
     /*
@@ -413,6 +471,44 @@ class Order extends Model implements Payable
         } while (static::query()->where('order_number', $number)->exists());
 
         return $number;
+    }
+
+    /**
+     * Whether a delivery company update may move the order to `$status`: only
+     * once handed to it (`delivery_reference`) and paid, until delivered or
+     * cancelled; forward along DELIVERY_FLOW (updates may skip steps, a late
+     * one never moves the order back), except back to waiting for a driver when
+     * the driver drops it before pickup. A cancellation (or one being
+     * processed) is accepted at any point; while one is processed the delivery
+     * may still resume.
+     */
+    public function canMoveDeliveryTo(string $status): bool
+    {
+        if (! $this->delivery_reference || $this->payment_status !== self::PAYMENT_PAID || $status === $this->status) {
+            return false;
+        }
+
+        $current = $this->status === self::STATUS_CANCELLATION_PROCESSING
+            ? 0
+            : array_search($this->status, self::DELIVERY_FLOW, true);
+
+        if ($current === false || $this->status === self::STATUS_DELIVERED) {
+            return false;
+        }
+
+        if (in_array($status, [self::STATUS_CANCELLATION_PROCESSING, self::STATUS_CANCELLED], true)) {
+            return true;
+        }
+
+        $target = array_search($status, self::DELIVERY_FLOW, true);
+
+        if ($target === false || $status === self::STATUS_READY) {
+            return false;
+        }
+
+        return $target > $current
+            || ($status === self::STATUS_PENDING_DRIVER_ACCEPTANCE
+                && $current < array_search(self::STATUS_ORDER_PICKED_UP, self::DELIVERY_FLOW, true));
     }
 
     public function storeBadge(): string

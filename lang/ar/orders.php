@@ -13,6 +13,10 @@ return [
     'processing' => 'بدأ تجهيز الطلب.',
     'ready'      => 'تم تحديد الطلب كجاهز.',
     'dispatched' => 'تم إرسال الطلب للكباتن المتاحين لاستلامه.',
+    'dispatched_to_delivery' => 'تم إرسال الطلب لشركة التوصيل، وسيتم تعيين مندوب لاستلامه.',
+    'delivery_failed' => 'تعذر إرسال الطلب لشركة التوصيل، يرجى المحاولة مرة أخرى.',
+    'delivery_store_location_required' => 'حدد موقع الفرع الرئيسي للمتجر على الخريطة قبل إرسال الطلب للمندوب.',
+    'delivery_customer_location_required' => 'لا يحتوي عنوان العميل على موقع على الخريطة، لا يمكن إرساله لشركة التوصيل.',
     'cancelled'  => 'تم إلغاء الطلب.',
     'delivered'  => 'تم تأكيد توصيل الطلب.',
 
@@ -33,6 +37,14 @@ return [
         'out_for_delivery' => 'في الطريق',
         'delivered'        => 'تم التوصيل',
         'cancelled'        => 'ملغى',
+        'order_created' => 'تم إرسال الطلب لشركة التوصيل',
+        'pending_driver_acceptance' => 'بانتظار قبول المندوب',
+        'driver_accepted' => 'تم تعيين المندوب',
+        'pending_order_preparation' => 'بانتظار تجهيز الطلب',
+        'arrived_to_pickup' => 'وصل المندوب للمتجر',
+        'order_picked_up' => 'في الطريق',
+        'arrived_to_dropoff' => 'وصل الموقع',
+        'cancellation_processing' => 'جارٍ إلغاء التوصيل',
     ],
 
     'actions' => [
@@ -49,6 +61,31 @@ return [
         'view_details' => 'تفاصيل طلب',
         'track'   => 'تتبع الطلب',
         'details' => 'تفاصيل الطلب',
+        'pay'     => 'إكمال الدفع',
+        'cancel'  => 'إلغاء الطلب',
+        'contact_support' => 'تواصل مع الدعم',
+        'visit_store' => 'زيارة المتجر',
+    ],
+
+    // ملخص الدفع (شاشة تفاصيل الطلب)
+    'summary' => [
+        'subtotal'     => 'المجموع الفرعي',
+        'delivery_fee' => 'رسوم التوصيل',
+        'express_fee'  => 'رسوم التوصيل الفوري',
+        'discount'     => 'الخصم',
+        'tax'          => 'ضريبة القيمة المضافة (:rate%)',
+        'total'        => 'الإجمالي',
+        'free'         => 'مجاني',
+    ],
+
+    // تبويبات "طلباتي" وعنوان البطاقة
+    'tabs' => [
+        'active'  => 'الحالية',
+        'history' => 'السابقة',
+    ],
+    'location' => [
+        'full'     => ':city، :district',
+        'district' => 'حي :district',
     ],
     'today'     => 'اليوم',
     'yesterday' => 'أمس',
@@ -71,6 +108,14 @@ return [
         'out_for_delivery' => ['label' => 'في الطريق', 'description' => 'طلبك في الطريق إليك.'],
         'delivered'        => ['label' => 'تم التوصيل', 'description' => 'تم توصيل طلبك. نتمنى أن ينال إعجابك!'],
         'cancelled'        => ['label' => 'ملغى', 'description' => 'تم إلغاء هذا الطلب.'],
+        'order_created' => ['label' => 'تم إرسال الطلب لشركة التوصيل', 'description' => 'تم إرسال طلبك لشركة التوصيل وسيتم تعيين مندوب قريباً.'],
+        'pending_driver_acceptance' => ['label' => 'بانتظار قبول المندوب', 'description' => 'نبحث عن أقرب مندوب لاستلام طلبك.'],
+        'driver_accepted' => ['label' => 'تم تعيين المندوب', 'description' => 'قبل المندوب طلبك وهو في طريقه للمتجر.'],
+        'pending_order_preparation' => ['label' => 'بانتظار تجهيز الطلب', 'description' => 'المندوب بانتظار تسليم طلبك من المتجر.'],
+        'arrived_to_pickup' => ['label' => 'وصل المندوب للمتجر', 'description' => 'وصل المندوب للمتجر لاستلام طلبك.'],
+        'order_picked_up' => ['label' => 'في الطريق', 'description' => 'استلم المندوب طلبك وهو في الطريق إليك.'],
+        'arrived_to_dropoff' => ['label' => 'وصل الموقع', 'description' => 'وصل المندوب إلى موقعك.'],
+        'cancellation_processing' => ['label' => 'جارٍ إلغاء التوصيل', 'description' => 'نعالج إلغاء توصيل طلبك.'],
     ],
 
     // تطبيق المتجر: شارة الطلب، عدد المنتجات وعنوان شاشة التفاصيل

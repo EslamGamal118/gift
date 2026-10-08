@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
 
             // 4) المنتجات — تعتمد على المتاجر المعتمدة والتصنيفات
             ProductSeeder::class,
+            AddonSeeder::class,          // يعتمد على منتجات المتاجر وتصنيفاتها
             StoreReviewSeeder::class,
 
             // 5) بيانات تابعة تعتمد على أرقام جوال المستخدمين
@@ -46,6 +47,9 @@ class DatabaseSeeder extends Seeder
 
             // 8) مراجعات الطلبات المنتهية — تعتمد على الطلبات أعلاه وتُحدّث تقييمات المتاجر والمنتجات والمتسوقين
             ReviewSeeder::class,
+
+            // 9) الهدايا الأونلاين بكل حالات الدفع والاستلام والاستخدام والإشعارات — تعتمد على العملاء ومنتجات الهدايا
+            GiftSeeder::class,
         ]);
     }
 }

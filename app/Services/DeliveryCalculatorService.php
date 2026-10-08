@@ -12,6 +12,7 @@ use App\Support\Geo;
  * Pricing is tiered: `base_fee` covers the first `base_distance_km`, then
  * `fee_per_extra_km` is added for every started km beyond it, capped at
  * `max_fee`. A store's flat `delivery_fee` overrides the whole calculation.
+ * While delivery is free (config `checkout.free_delivery`) every fee is 0.
  *
  * Distances passed in are already road distances (`distance_km` from
  * StoreProfile::withDistanceTo(), or roadDistanceKm() for PHP-side values).
@@ -53,11 +54,23 @@ class DeliveryCalculatorService
      */
     public function fee(StoreProfile $store, ?float $distanceKm): float
     {
+        if (self::isFree()) {
+            return 0.0;
+        }
+
         if ($store->delivery_fee !== null) {
             return round((float) $store->delivery_fee, 2);
         }
 
         return $this->distanceFee($distanceKm);
+    }
+
+    /**
+     * Whether the customer is charged nothing for delivery (config `checkout.free_delivery`).
+     */
+    public static function isFree(): bool
+    {
+        return (bool) config('checkout.free_delivery', false);
     }
 
     /**

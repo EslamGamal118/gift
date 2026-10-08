@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// Landing page; ?lang=ar|en switches the language (remembered in the session)
 Route::get('/', function () {
-    return view('welcome');
-});
+    return view('landing');
+})->middleware('web.locale')->name('landing');

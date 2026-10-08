@@ -105,6 +105,30 @@ class CustomOrderException extends ApiException
         ]);
     }
 
+    /**
+     * Only a paid order can be sent to the driver.
+     */
+    public static function notDispatchable(string $status): self
+    {
+        return new self('custom_orders.not_dispatchable', 409, ['current_status' => $status], [
+            'status' => __('custom_orders.statuses.'.$status),
+        ]);
+    }
+
+    public static function pickupLocationRequired(): self
+    {
+        return new self('custom_orders.pickup_location_required', 422);
+    }
+
+    /**
+     * The delivery company refused the order or could not be reached; the
+     * order is unchanged and can be sent again.
+     */
+    public static function deliveryFailed(string $reason): self
+    {
+        return new self('custom_orders.delivery_failed', 502, ['reason' => $reason, 'retryable' => true]);
+    }
+
     public static function notCancellable(string $status): self
     {
         return new self('custom_orders.not_cancellable', 409, ['current_status' => $status], [

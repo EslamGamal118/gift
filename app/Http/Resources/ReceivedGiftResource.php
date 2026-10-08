@@ -34,7 +34,8 @@ class ReceivedGiftResource extends JsonResource
             'item_image' => $this->fileUrl($line?->product_image),
             'quantity' => $line ? (int) $line->quantity : null,
 
-            'qr_code' => $status === Gift::STATUS_ACTIVE ? [
+            // No code = payment never confirmed through GiftService::handlePaid()
+            'qr_code' => $status === Gift::STATUS_ACTIVE && $this->redemption_code ? [
                 'value' => $this->redemption_code,      // render as QR in the app
                 'format' => 'qr',
             ] : null,
@@ -43,6 +44,7 @@ class ReceivedGiftResource extends JsonResource
                 'id' => $profile?->id,                   // GET /api/v1/stores/{id}
                 'name' => $profile?->store_name ?? $this->store?->name,
                 'logo' => $this->fileUrl($profile?->logo),
+                'description' => $profile?->description,
                 'rating' => round((float) $profile?->rating_avg, 1),
             ],
             // Where to redeem it: the store's main branch
@@ -57,8 +59,6 @@ class ReceivedGiftResource extends JsonResource
 
             'status' => [
                 'key' => $status,                        // active | redeemed | expired
-                'label' => __('gifts.statuses.'.$status),
-                'tab' => $status === Gift::STATUS_ACTIVE ? Gift::TAB_AVAILABLE : Gift::TAB_FINISHED,
             ],
             'redeemed_at' => $this->redeemed_at?->toIso8601String(),
             'is_opened' => $this->isOpened(),

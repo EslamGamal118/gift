@@ -10,13 +10,15 @@ use Illuminate\Validation\Rule;
 
 /**
  * POST /shopper/orders/{customOrder}/status  (JSON or multipart)
- * { status: accepted|in_progress|waiting_for_payment|cancelled, cancellation_reason?, items?: [{ id, unit_price }],
+ * { status: accepted|in_progress|waiting_for_payment|send_to_driver|cancelled, cancellation_reason?, items?: [{ id, unit_price }],
  *   invoice_image?, pickup_address_id? | pickup_address{...}?, shopper_fees? }
  *
  * `purchased` (and `completed`, its former name) is accepted for
  * `waiting_for_payment` (تم الشراء: the customer pays next), `started` for
  * `in_progress`, and `reject` / `rejected` / `cancel` / `canceled` /
- * `decline` / `declined` for `cancelled` (رفض / إلغاء الطلب).
+ * `decline` / `declined` for `cancelled` (رفض / إلغاء الطلب), and `dispatch` /
+ * `send_to_delivery` / `ready_for_pickup` for `send_to_driver` (إرسال للمندوب: once
+ * paid, the order is created at Alshrouq Delivery).
  *
  * Two ways to complete the order:
  *  1. Status only ({ status: purchased }): nothing else is required.
@@ -51,6 +53,11 @@ class UpdateShopperOrderStatusRequest extends ShopperOrderActionRequest
         'canceled'  => CustomOrder::STATUS_CANCELLED,
         'decline'   => CustomOrder::STATUS_CANCELLED,
         'declined'  => CustomOrder::STATUS_CANCELLED,
+        'dispatch'         => ShopperOrderService::ACTION_SEND_TO_DRIVER,
+        'dispatched'       => ShopperOrderService::ACTION_SEND_TO_DRIVER,
+        'send_to_delivery' => ShopperOrderService::ACTION_SEND_TO_DRIVER,
+        'sent_to_driver'   => ShopperOrderService::ACTION_SEND_TO_DRIVER,
+        'ready_for_pickup' => ShopperOrderService::ACTION_SEND_TO_DRIVER,
     ];
 
     /**

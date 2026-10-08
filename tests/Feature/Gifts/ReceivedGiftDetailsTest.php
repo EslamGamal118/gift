@@ -143,6 +143,17 @@ class ReceivedGiftDetailsTest extends TestCase
         $this->getJson('/api/v1/gifts/received?tab=old')->assertUnprocessable();
     }
 
+    public function test_a_gift_marked_paid_without_the_payment_flow_has_no_qr_object(): void
+    {
+        $gift = $this->paidGift();
+        $gift->forceFill(['redemption_code' => null, 'expires_at' => null])->save();
+
+        Sanctum::actingAs($this->recipient);
+        $this->getJson("/api/v1/gifts/received/{$gift->id}")
+            ->assertOk()
+            ->assertJsonPath('data.qr_code', null);
+    }
+
     public function test_the_store_redeems_the_qr_once(): void
     {
         $gift = $this->paidGift();

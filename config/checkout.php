@@ -22,6 +22,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Free Delivery
+    |--------------------------------------------------------------------------
+    |
+    | Delivery is on us (our delivery partner, Alshrouq): the customer is never
+    | charged for it. Every delivery fee (distance pricing or a store's flat
+    | fee), the instant-delivery fee and the custom order delivery fee are 0,
+    | in the cart, at checkout, on the orders and wherever a fee is shown.
+    | Delivery types, slots and ETAs are unchanged. Off: the pricing in
+    | config/stores.php `delivery` and custom_orders.delivery.fee applies.
+    |
+    */
+
+    'free_delivery' => (bool) env('CHECKOUT_FREE_DELIVERY', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cart
     |--------------------------------------------------------------------------
     */

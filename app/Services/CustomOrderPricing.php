@@ -37,13 +37,15 @@ class CustomOrderPricing
 
     /**
      * Fill (not save) final_amount, shopper_fees, delivery_fee, tax_amount and total_amount.
+     * While delivery is free the delivery fee is 0, whatever was stored or configured
+     * (an order invoiced before is re-priced without it at payment).
      *
      * @return array{subtotal: float, delivery_fee: float, tax_rate: float, tax: float, total: float, prices_include_tax: bool}
      */
     public function apply(CustomOrder $order, float $itemsSubtotal, float $shopperFees, float $deliveryFee): array
     {
         $subtotal = round($itemsSubtotal + $shopperFees, 2);
-        $totals   = $this->checkout->totals($subtotal, 0, $deliveryFee, 0);
+        $totals   = $this->checkout->totals($subtotal, 0, DeliveryCalculatorService::isFree() ? 0.0 : $deliveryFee, 0);
 
         $order->forceFill([
             'final_amount' => $subtotal,

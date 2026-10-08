@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * GET /shopper/orders?tab=active|history&status=new|accepted|in_progress|waiting_for_alternative|completed|cancelled&search=&page=&per_page=
+ * GET /shopper/orders?tab=active|history&status=new|accepted|in_progress|waiting_for_alternative|paid|order_created|…|completed|cancellation_processing|cancelled&search=&page=&per_page=
  *
  * `tab` splits current work (الحالية) from past orders (السابقة); `status`
  * narrows to one badge inside it (also accepts pending / confirmed / canceled);

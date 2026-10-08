@@ -40,7 +40,7 @@ class CustomOrderSeeder extends Seeder
      * before step 2).
      *
      * Active tab: pending / accepted / in_progress / waiting_for_alternative /
-     * waiting_for_payment. History: completed (paid) / cancelled.
+     * waiting_for_payment / paid and being delivered. History: completed (delivered) / cancelled.
      */
     protected const PLAN = [
         [CustomOrder::STATUS_DRAFT, 'none', 1],
@@ -51,6 +51,15 @@ class CustomOrderSeeder extends Seeder
         [CustomOrder::STATUS_IN_PROGRESS, 'direct', 3],
         [CustomOrder::STATUS_WAITING_FOR_ALTERNATIVE, 'direct', 2],
         [CustomOrder::STATUS_WAITING_FOR_PAYMENT, 'direct', 2],
+        [CustomOrder::STATUS_PAID, 'direct', 2],
+        [CustomOrder::STATUS_ORDER_CREATED, 'direct', 1],
+        [CustomOrder::STATUS_PENDING_DRIVER_ACCEPTANCE, 'direct', 1],
+        [CustomOrder::STATUS_DRIVER_ACCEPTED, 'direct', 1],
+        [CustomOrder::STATUS_PENDING_ORDER_PREPARATION, 'direct', 1],
+        [CustomOrder::STATUS_ARRIVED_TO_PICKUP, 'direct', 1],
+        [CustomOrder::STATUS_ORDER_PICKED_UP, 'direct', 1],
+        [CustomOrder::STATUS_ARRIVED_TO_DROPOFF, 'direct', 1],
+        [CustomOrder::STATUS_CANCELLATION_PROCESSING, 'direct', 1],
         [CustomOrder::STATUS_COMPLETED, 'direct', 6],
         [CustomOrder::STATUS_CANCELLED, 'direct', 3],
     ];
@@ -329,12 +338,13 @@ class CustomOrderSeeder extends Seeder
         $reached = match ($status) {
             CustomOrder::STATUS_CANCELLED                => [CustomOrder::STATUS_PENDING, CustomOrder::STATUS_ACCEPTED, CustomOrder::STATUS_IN_PROGRESS][$i % 3],
             CustomOrder::STATUS_WAITING_FOR_ALTERNATIVE => [CustomOrder::STATUS_ACCEPTED, CustomOrder::STATUS_IN_PROGRESS][$i % 2],
-            default                                      => $status,
+            default                                      => in_array($status, [...CustomOrder::DELIVERY_FLOW, CustomOrder::STATUS_CANCELLATION_PROCESSING], true) ? CustomOrder::STATUS_PAID : $status,
         };
+        $paid = $reached === CustomOrder::STATUS_PAID;
 
         $order = [
             CustomOrder::STATUS_PENDING, CustomOrder::STATUS_ACCEPTED, CustomOrder::STATUS_IN_PROGRESS,
-            CustomOrder::STATUS_WAITING_FOR_PAYMENT, CustomOrder::STATUS_COMPLETED,
+            CustomOrder::STATUS_WAITING_FOR_PAYMENT, CustomOrder::STATUS_PAID,
         ];
         $depth = array_search($reached, $order, true);
 
@@ -346,17 +356,26 @@ class CustomOrderSeeder extends Seeder
         }
         if ($depth >= 3) {
             // Purchased: what the shopper actually spent, somewhere inside the budget
-            $steps['purchased_at'] = $status === CustomOrder::STATUS_COMPLETED
+            $steps['purchased_at'] = $paid
                 ? $createdAt->copy()->addDay()->setTime(18, 0)
                 : $createdAt->copy()->addHours(2);
             $steps['final_amount'] = round($budget['min'] + ($budget['max'] - $budget['min']) * (0.3 + 0.1 * ($i % 6)), 2);
         }
-        if ($status === CustomOrder::STATUS_COMPLETED) {
-            // Completed = paid by the customer
-            $steps['completed_at']   = $createdAt->copy()->addDay()->setTime(19, 30);
-            $steps['paid_at']        = $steps['completed_at'];
+        if ($paid) {
+            // Paid by the customer, then delivered (completed) or still on its way
+            $steps['paid_at']        = $createdAt->copy()->addDay()->setTime(18, 30);
             $steps['payment_status'] = CustomOrder::PAYMENT_PAID;
             $steps['payment_method'] = 'alrajhi';
+        }
+        if ($paid && $status !== CustomOrder::STATUS_PAID) {
+            // Alshrouq's status name (the map also has its numeric ids)
+            $steps['delivery_status']     = collect(config('alshrouq.statuses'))->filter(fn ($ours, $theirs) => is_string($theirs))->search($status) ?: $status;
+            $steps['delivery_reference']  = (string) (600000 + $i);
+            $steps['delivery_driver']     = ['name' => 'سعد المندوب', 'phone' => '566278832', 'tracking_url' => 'https://www.google.com/maps?q=24.7127,46.6765'];
+            $steps['delivery_updated_at'] = $createdAt->copy()->addDay()->setTime(19, 30);
+        }
+        if ($status === CustomOrder::STATUS_COMPLETED) {
+            $steps['completed_at'] = $steps['delivery_updated_at'];
         }
         if ($status === CustomOrder::STATUS_CANCELLED) {
             [$by, $reason] = self::CANCELLATIONS[$i % count(self::CANCELLATIONS)];

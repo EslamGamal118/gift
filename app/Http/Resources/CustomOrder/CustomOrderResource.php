@@ -39,45 +39,18 @@ class CustomOrderResource extends JsonResource
             'can_assign'   => $this->isAssignable(),
             'can_confirm'  => $this->isConfirmable(),
 
-            'assignment'   => [
-                'mode'               => $this->assignment_mode,
-                'mode_label'         => $this->assignment_mode ? __('custom_orders.assignment_modes.'.$this->assignment_mode) : null,
-                'is_open_for_bidding' => $this->isOpenForBidding(),
-                'bidding_opened_at'  => $this->bidding_opened_at?->toIso8601String(),
-                'assigned_at'        => $this->assigned_at?->toIso8601String(),
-            ],
-
             'shopper'      => $this->shopperCard(),
 
-            'address'      => $this->hasDeliveryAddress() ? [
-                'id'              => $this->delivery_address_id,
-                'name'            => $this->delivery_name,
-                'phone'           => $this->delivery_phone,
-                'location_name'   => $this->delivery_location_name,
-                'city'            => $this->delivery_city,
-                'district'        => $this->delivery_district,
-                'street'          => $this->delivery_street,
-                'building_number' => $this->delivery_building_number,
-                'full_address'    => $this->delivery_address,
-                'latitude'        => $this->delivery_latitude !== null ? (float) $this->delivery_latitude : null,
-                'longitude'       => $this->delivery_longitude !== null ? (float) $this->delivery_longitude : null,
-            ] : null,
+           'address' => $this->hasDeliveryAddress() ? [
+    'id'           => $this->delivery_address_id,
+    'full_address' => $this->delivery_address, // النص الكامل اللي ظاهر في التصميم
+    'city'         => $this->delivery_city,
+    'district'     => $this->delivery_district,
+] : null,
 
             'delivery_at'  => $this->delivery_at?->toIso8601String(),
-            'delivery'     => [
-                'at'           => $this->delivery_at?->toIso8601String(),
-                'date'         => $this->delivery_date?->toDateString(),
-                'slot'         => $this->hasDeliverySlot() ? [
-                    'id'    => $this->delivery_slot_id,
-                    'label' => $this->delivery_slot_label,
-                ] : null,
-                'window_start' => $this->delivery_window_start?->toIso8601String(),
-                'window_end'   => $this->delivery_window_end?->toIso8601String(),
-            ],
             'notes'        => $this->notes,
             'confirmation_notes' => $this->confirmation_notes,
-
-            'budget'       => $this->budget(),
             'final_amount' => $this->final_amount !== null ? Money::format($this->final_amount, $this->currency) : null,
 
             // The shopper's invoice and what the customer pays (items + fees + delivery + VAT)
@@ -87,6 +60,7 @@ class CustomOrderResource extends JsonResource
                 ? Arr::except($this->pickupDetails(), ['phone'])
                 : null),
             'invoice'      => $this->invoiceDetails(),
+            'delivery_tracking' => $this->deliveryTracking(),
             'pricing'      => $this->pricing(),
             'payment'      => [
                 'status'     => $this->payment_status,
@@ -102,24 +76,12 @@ class CustomOrderResource extends JsonResource
             )),
 
             'bids'         => $this->whenLoaded('bids', fn () => CustomOrderBidResource::collection($this->bids)),
-
-            'timeline'     => [
-                'submitted_at' => $this->submitted_at?->toIso8601String(),
-                'assigned_at'  => $this->assigned_at?->toIso8601String(),
-                'accepted_at'  => $this->accepted_at?->toIso8601String(),
-                'started_at'   => $this->started_at?->toIso8601String(),
-                'purchased_at' => $this->purchased_at?->toIso8601String(),
-                'completed_at' => $this->completed_at?->toIso8601String(),
-                'paid_at'      => $this->paid_at?->toIso8601String(),
-                'cancelled_at' => $this->cancelled_at?->toIso8601String(),
-            ],
             'cancellation' => $this->when($this->status === CustomOrder::STATUS_CANCELLED, fn () => [
                 'by'     => $this->cancelled_by,
                 'reason' => $this->cancellation_reason,
             ]),
 
             'created_at'   => $this->created_at?->toIso8601String(),
-            'updated_at'   => $this->updated_at?->toIso8601String(),
         ];
     }
 }

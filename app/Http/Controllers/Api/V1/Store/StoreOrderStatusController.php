@@ -39,15 +39,17 @@ class StoreOrderStatusController extends Controller
      * status: accepted | preparing | ready_for_pickup | send_to_captain | completed | cancelled
      * (`reason` is required when cancelling). Unpaid orders are 404, a status
      * out of flow is 422, and the customer is notified of the new status.
-     * `send_to_captain` broadcasts the order to every active captain.
+     * `send_to_captain` creates the order at the delivery company (Alshrouq)
+     * when enabled: its reference and status come back on the order, and if
+     * Alshrouq refuses it the order stays `ready` (422 with the reason).
+     * Otherwise it is broadcast to every active captain.
      */
     public function update(UpdateStoreOrderStatusRequest $request, int $order): JsonResponse
     {
         $status = $request->targetStatus();
+        $updated = $this->orders->updateStatus($request->order(), $request->user(), $status, $request->reason());
 
-        return $this->respond(self::STATUS_MESSAGES[$status], $this->orders->updateStatus(
-            $request->order(), $request->user(), $status, $request->reason(),
-        ));
+        return $this->respond($this->message($status, $updated), $updated);
     }
 
     /**
@@ -71,7 +73,19 @@ class StoreOrderStatusController extends Controller
      */
     public function dispatchCaptain(StoreOrderActionRequest $request, int $order): JsonResponse
     {
-        return $this->respond('orders.dispatched', $this->orders->dispatchToCaptains($request->order(), $request->user()));
+        $updated = $this->orders->dispatchToCaptains($request->order(), $request->user());
+
+        return $this->respond($this->message('send_to_captain', $updated), $updated);
+    }
+
+    /**
+     * Success message; a dispatch says where the order went.
+     */
+    protected function message(string $status, Order $order): string
+    {
+        $key = self::STATUS_MESSAGES[$status];
+
+        return $key === 'orders.dispatched' && $order->delivery_reference ? 'orders.dispatched_to_delivery' : $key;
     }
 
     protected function respond(string $messageKey, Order $order): JsonResponse

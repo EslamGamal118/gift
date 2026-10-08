@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\CustomOrderException;
+use App\Services\Delivery\AlshrouqException;
 use App\Models\CustomOrder;
 use App\Models\CustomOrderAlternative;
 use App\Models\CustomOrderItem;
@@ -45,7 +46,16 @@ class ShopperOrderService
         'in_progress' => CustomOrder::STATUS_IN_PROGRESS,
         'waiting_for_alternative' => CustomOrder::STATUS_WAITING_FOR_ALTERNATIVE,
         'waiting_for_payment'     => CustomOrder::STATUS_WAITING_FOR_PAYMENT,
+        'paid'                      => CustomOrder::STATUS_PAID,
+        'order_created'             => CustomOrder::STATUS_ORDER_CREATED,
+        'pending_driver_acceptance' => CustomOrder::STATUS_PENDING_DRIVER_ACCEPTANCE,
+        'driver_accepted'           => CustomOrder::STATUS_DRIVER_ACCEPTED,
+        'pending_order_preparation' => CustomOrder::STATUS_PENDING_ORDER_PREPARATION,
+        'arrived_to_pickup'         => CustomOrder::STATUS_ARRIVED_TO_PICKUP,
+        'order_picked_up'           => CustomOrder::STATUS_ORDER_PICKED_UP,
+        'arrived_to_dropoff'        => CustomOrder::STATUS_ARRIVED_TO_DROPOFF,
         'completed'   => CustomOrder::STATUS_COMPLETED,
+        'cancellation_processing'   => CustomOrder::STATUS_CANCELLATION_PROCESSING,
         'cancelled'   => CustomOrder::STATUS_CANCELLED,
     ];
 
@@ -71,7 +81,7 @@ class ShopperOrderService
     /**
      * Statuses the shopper sets, in workflow order, with the timestamp each one stamps.
      * pending -> accepted (قبول الطلب) -> in_progress (بدء التسوق) -> waiting_for_payment (تم الشراء)
-     * The order is `completed` by the customer's payment, not by the shopper.
+     * The order is `paid` by the customer's payment, then moved on by the delivery company.
      *
      * @var array<string, string>
      */
@@ -91,8 +101,16 @@ class ShopperOrderService
         CustomOrder::STATUS_ACCEPTED,
         CustomOrder::STATUS_IN_PROGRESS,
         CustomOrder::STATUS_WAITING_FOR_PAYMENT,
+        self::ACTION_SEND_TO_DRIVER,
         CustomOrder::STATUS_CANCELLED,
     ];
+
+    /**
+     * Once paid, the shopper hands the order to the delivery company (إرسال
+     * للمندوب): it is created at Alshrouq and follows its statuses from there
+     * (`order_created`, ...). An action, not a stored status.
+     */
+    public const ACTION_SEND_TO_DRIVER = 'send_to_driver';
 
     /**
      * Statuses during which the shopper may suggest alternatives (also while
@@ -114,6 +132,7 @@ class ShopperOrderService
     public function __construct(
         protected NotificationService $notifications,
         protected CustomOrderPricing $pricing,
+        protected CustomOrderDeliveryService $delivery,
     ) {}
 
     /**
@@ -180,6 +199,10 @@ class ShopperOrderService
      */
     public static function nextStatus(CustomOrder $order): ?string
     {
+        if ($order->status === CustomOrder::STATUS_PAID && ! $order->delivery_reference) {
+            return self::ACTION_SEND_TO_DRIVER;
+        }
+
         foreach (array_keys(self::WORKFLOW) as $status) {
             if ($order->canTransitionTo($status)) {
                 return $status;
@@ -211,6 +234,10 @@ class ShopperOrderService
      */
     public function updateStatus(User $shopper, CustomOrder $order, string $status, ?string $reason = null, array $itemPrices = [], ?array $invoice = null): CustomOrder
     {
+        if ($status === self::ACTION_SEND_TO_DRIVER) {
+            return $this->sendToDriver($shopper, $order);
+        }
+
         $previous = $order->status;
         $path     = $invoice ? $this->storeInvoice($order, $invoice['image']) : null;
         $replaced = null;
@@ -280,7 +307,7 @@ class ShopperOrderService
         $this->deleteInvoiceFile($replaced);
 
         if ($order->status !== $previous) {
-            $this->notifications->notifyCustomOrderStatus($order, $previous);
+            $this->notifications->notifyCustomOrderStatusChanged($order, $previous);
         }
 
         $order->load('user:id,name,avatar')->loadCount('items');
@@ -421,10 +448,52 @@ class ShopperOrderService
         $this->deleteInvoiceFile($replaced);
 
         if ($order->status !== $previous) {
-            $this->notifications->notifyCustomOrderStatus($order, $previous);
+            $this->notifications->notifyCustomOrderStatusChanged($order, $previous);
         }
 
         return $order->load(['user:id,name,phone,avatar', 'items.media', 'items.alternatives', 'pickupAddress'])->loadCount('items');
+    }
+
+    /**
+     * Send a paid order to the driver: create it at Alshrouq (pickup at the
+     * order's pickup address). Its Alshrouq id is stored as
+     * `delivery_reference` and the order moves to Alshrouq's status (usually
+     * `order_created`), which the customer and the shopper are told about.
+     * Sending it again once created is a no-op.
+     *
+     * When Alshrouq refuses or cannot be reached the order stays `paid`, the
+     * error is kept on it (`delivery_error`) and the shopper can try again.
+     *
+     * @throws CustomOrderException  not paid / already delivered, no pickup location, Alshrouq failed
+     */
+    public function sendToDriver(User $shopper, CustomOrder $order): CustomOrder
+    {
+        $order = CustomOrder::query()->forShopper($shopper->id)->with('pickupAddress')->findOrFail($order->getKey());
+
+        if ($order->status !== CustomOrder::STATUS_PAID || ! $order->isPaid()) {
+            if ($order->delivery_reference && ! $order->isFinal()) {
+                return $this->withCard($order);   // pressed twice: already with Alshrouq
+            }
+
+            throw CustomOrderException::notDispatchable($order->status);
+        }
+
+        if (! $order->pickupAddress?->latitude || ! $order->pickupAddress?->longitude) {
+            throw CustomOrderException::pickupLocationRequired();
+        }
+
+        try {
+            $order = $this->delivery->dispatch($order);
+        } catch (AlshrouqException $e) {
+            throw CustomOrderException::deliveryFailed($e->getMessage());
+        }
+
+        return $this->withCard($order);
+    }
+
+    protected function withCard(CustomOrder $order): CustomOrder
+    {
+        return $order->load('user:id,name,avatar')->loadCount('items');
     }
 
     protected function storeInvoice(CustomOrder $order, UploadedFile $image): string

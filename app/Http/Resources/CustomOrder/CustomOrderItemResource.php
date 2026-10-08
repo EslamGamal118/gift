@@ -31,18 +31,12 @@ class CustomOrderItemResource extends JsonResource
                 'min' => $this->expected_price_min !== null ? Money::format($this->expected_price_min, $currency) : null,
                 'max' => $this->expected_price_max !== null ? Money::format($this->expected_price_max, $currency) : null,
             ],
-            'expected_total' => [
-                'min' => $total['min'] !== null ? Money::format($total['min'], $currency) : null,
-                'max' => $total['max'] !== null ? Money::format($total['max'], $currency) : null,
-            ],
             // What the shopper actually paid (null until the order is purchased)
             'unit_price'   => $this->unit_price !== null ? Money::format($this->unit_price, $currency) : null,
             'total_price'  => $this->unit_price !== null ? Money::format($this->totalPrice(), $currency) : null,
             'images'       => $this->whenLoaded('media', fn () => $this->media->map(fn ($m) => [
                 'id'            => $m->id,
                 'url'           => $m->url(),
-                'mime_type'     => $m->mime_type,
-                'size'          => $m->size,
                 'original_name' => $m->original_name,
             ])->values()),
             // Products the shopper suggested instead of this item (for review)

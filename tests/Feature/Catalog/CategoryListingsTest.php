@@ -28,6 +28,9 @@ class CategoryListingsTest extends TestCase
     {
         parent::setUp();
 
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+
         $this->category = Category::factory()->create();
     }
 

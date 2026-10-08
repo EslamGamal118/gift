@@ -30,6 +30,9 @@ class HomeScreenTest extends TestCase
     {
         parent::setUp();
 
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+
         config(['stores.home.cache_ttl' => 0]);
     }
 

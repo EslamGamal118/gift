@@ -87,7 +87,7 @@ class StoreStatisticsService
             ->toBase()
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed', [Order::STATUS_DELIVERED])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS on_the_way', [Order::STATUS_OUT_FOR_DELIVERY])
+            ->selectRaw('SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END) AS on_the_way', Order::ON_THE_WAY_STATUSES)
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS cancelled', [Order::STATUS_CANCELLED])
             ->selectRaw(
                 'AVG(CASE WHEN status <> ? AND payment_status = ? THEN total_amount END) AS average_order_value',

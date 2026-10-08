@@ -38,10 +38,11 @@ class ProductListingResource extends JsonResource
                 'count'   => (int) $this->rating_count,
             ],
             'store'            => $store ? [
-                'id'      => $store->id,
-                'user_id' => $store->user_id,
-                'name'    => $store->store_name,
-                'logo'    => $this->fileUrl($store->logo),
+                'id'          => $store->id,
+                'user_id'     => $store->user_id,
+                'name'        => $store->store_name,
+                'description' => $store->description,
+                'logo'        => $this->fileUrl($store->logo),
             ] : null,
         ];
     }

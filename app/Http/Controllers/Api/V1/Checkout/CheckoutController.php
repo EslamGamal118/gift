@@ -144,27 +144,15 @@ class CheckoutController extends Controller
      *
      * @return array<string, mixed>
      */
-    protected function summaryPayload(Request $request): array
+   protected function summaryPayload(Request $request): array
     {
         $cart = $this->carts->forUser($request->user());
-        $summary = $this->checkout->summary($cart, $request->user());
+        $summary =$this->checkout->summary($cart,$request->user());
 
         return [
             // Every line of every store in one flat list, each with its own store
             // (`store.id` matches `stores[].store.id`); in the order they were added
             'items' => CartItemResource::collection($cart->items->sortBy('id')->values()),
-            // One entry per store = one order once placed: its delivery and totals
-            'stores' => collect($summary['stores'])->map(fn (array $share) => [
-                'store' => [
-                    'id' => $share['store_id'],
-                    'store_name' => $share['store']?->store_name,
-                    'logo' => $this->fileUrl($share['store']?->logo),
-                ],
-                'items_count' => (int) $share['items']->sum('quantity'),
-                'delivery' => $share['delivery'],
-                'totals' => $share['totals'],
-            ])->values(),
-            'address' => $summary['address'] ? new UserAddressResource($summary['address']) : null,
-        ] + collect($summary)->except(['cart', 'stores', 'address'])->all();
+        ] + collect($summary)->except(['cart', 'stores', 'address', 'delivery'])->all();
     }
 }

@@ -112,11 +112,56 @@ class OrderDetailsTest extends TestCase
             ->assertJsonPath('data.actions.support.phone', '920000000');
 
         $this->assertSame(
-            ['pending' => 'completed', 'accepted' => 'completed', 'processing' => 'current', 'ready' => 'upcoming', 'out_for_delivery' => 'upcoming', 'delivered' => 'upcoming'],
+            ['pending' => 'completed', 'accepted' => 'completed', 'processing' => 'current', 'ready' => 'upcoming', 'out_for_delivery' => 'upcoming', 'arrived_to_dropoff' => 'upcoming', 'delivered' => 'upcoming'],
             collect($response->json('data.timeline'))->pluck('state', 'key')->all(),
         );
         $this->assertSame('قيد المراجعة', $response->json('data.timeline.0.label'));
         $this->assertSame('10:20 ص', $response->json('data.timeline.2.at_label'));
+    }
+
+    public function test_each_screen_section_has_a_ready_to_render_block(): void
+    {
+        $order = $this->order([
+            'status' => Order::STATUS_PROCESSING, 'accepted_at' => '2026-10-03 10:05:00', 'preparing_at' => '2026-10-03 10:20:00',
+        ]);
+
+        $data = $this->actingAs($this->customer, 'sanctum')
+            ->withHeader('Accept-Language', 'ar')
+            ->getJson("/api/v1/user/orders/{$order->id}")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(['order_reference' => '#GFT-10254', 'placed_at_label' => 'اليوم، 2:00 م'], array_diff_key($data['header'], ['created_at' => 0]));
+        $this->assertSame([false, false, true, false], array_slice(array_column($data['timeline'], 'is_current'), 0, 4));
+        $this->assertSame('زيارة المتجر', $data['store']['visit_label']);
+        $this->assertSame('الرياض، حي الياسمين', $data['store']['address']);
+        $this->assertSame([false, '25.00 ر.س'], [$data['delivery_info']['is_free'], $data['delivery_info']['fee_label']]);
+
+        $this->assertSame(
+            [
+                ['subtotal', 'المجموع الفرعي', 500],
+                ['delivery_fee', 'رسوم التوصيل', 25],
+                ['discount', 'الخصم', -50],
+                ['tax', 'ضريبة القيمة المضافة (15%)', 71.25],
+                ['total', 'الإجمالي', 546.25],
+            ],
+            array_map(fn ($line) => [$line['key'], $line['label'], $line['amount']['amount']], $data['payment_summary']['lines']),
+        );
+
+        $this->assertSame(
+            [['cancel_order', 'إلغاء الطلب', false, null], ['contact_support', 'تواصل مع الدعم', true, null]],
+            array_map(fn ($b) => [$b['key'], $b['label'], $b['enabled'], $b['endpoint'] ?? null], $data['actions']['buttons']),
+        );
+    }
+
+    public function test_free_delivery_reads_free(): void
+    {
+        $order = $this->order(['status' => Order::STATUS_PENDING, 'delivery_fee' => 0]);
+
+        $info = $this->actingAs($this->customer, 'sanctum')->withHeader('Accept-Language', 'ar')
+            ->getJson("/api/v1/orders/{$order->id}")->assertOk()->json('data.delivery_info');
+
+        $this->assertSame([true, 'مجاني'], [$info['is_free'], $info['fee_label']]);
     }
 
     public function test_a_delivered_order_completes_every_step(): void

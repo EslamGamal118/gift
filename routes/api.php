@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\Payment\AlRajhiController;
 use App\Http\Controllers\Api\V1\Payment\CheckoutPaymentController;
 use App\Http\Controllers\Api\V1\Payment\PaymentController;
 use App\Http\Controllers\Api\V1\Payment\TabbyController;
+use App\Http\Controllers\Api\V1\Delivery\AlshrouqController;
 use App\Http\Controllers\Api\V1\Payment\TamaraController;
 use App\Http\Controllers\Api\V1\ProductDetailsController;
 use App\Http\Controllers\Api\V1\Profile\LocationController;
@@ -349,6 +350,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::prefix('webhooks')->name('webhooks.')->group(function () {
         Route::post('tabby', [TabbyController::class, 'webhook'])->name('tabby');
         Route::post('tamara', [TamaraController::class, 'webhook'])->name('tamara');
+        Route::post('alshrouq', [AlshrouqController::class, 'webhook'])->middleware('throttle:120,1')->name('alshrouq');
     });
 });
 

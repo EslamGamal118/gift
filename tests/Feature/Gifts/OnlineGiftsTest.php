@@ -140,6 +140,41 @@ class OnlineGiftsTest extends TestCase
         $this->assertSame(0, NotificationContent::query()->count());
     }
 
+    public function test_checkout_links_the_customer_with_the_recipient_phone(): void
+    {
+        // Same number, other roles: never the recipient
+        User::factory()->shopper()->create(['phone' => '966555123456']);
+        User::factory()->storeOwner()->create(['phone' => '966555123456']);
+        $recipient = User::factory()->customer()->create(['phone' => '966555123456']);
+
+        // Typed in local format, normalized before the lookup
+        $gift = $this->buyGift(['recipient_phone' => '0555123456']);
+
+        $this->assertSame($recipient->id, $gift->recipient_id);
+        $this->assertFalse($gift->is_claimed);          // claimed once paid
+        $this->assertNull($gift->claimed_at);
+
+        Sanctum::actingAs($recipient);
+        $this->getJson('/api/v1/gifts/received')->assertOk()->assertJsonCount(0, 'data.items');
+
+        $this->confirmPayment($gift);
+        $gift->refresh();
+
+        $this->assertTrue($gift->is_claimed);
+        $this->assertSame($recipient->id, $gift->recipient_id);
+        $this->getJson('/api/v1/gifts/received')->assertOk()->assertJsonCount(1, 'data.items');
+    }
+
+    public function test_checkout_for_a_number_without_a_customer_account_leaves_the_recipient_empty(): void
+    {
+        User::factory()->shopper()->create(['phone' => '966555123456']);
+
+        $gift = $this->buyGift();
+
+        $this->assertNull($gift->recipient_id);
+        $this->assertFalse($gift->is_claimed);
+    }
+
     public function test_only_special_category_products_in_stock_can_be_gifted(): void
     {
         Sanctum::actingAs($this->sender);

@@ -8,6 +8,14 @@ use Tests\TestCase;
 
 class DeliveryCalculatorServiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+    }
+
     protected function calculator(array $pricing = []): DeliveryCalculatorService
     {
         return new DeliveryCalculatorService([

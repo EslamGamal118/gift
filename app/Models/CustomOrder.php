@@ -25,8 +25,13 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  *   ─▶ step 3 confirm with address + delivery time (draft ──▶ pending)
  *
  *   draft ──confirm──▶ pending ──accept──▶ accepted ──start──▶ in_progress
- *     ──purchased (invoice)──▶ waiting_for_payment ──customer pays (gateway)──▶ completed
+ *     ──purchased (invoice)──▶ waiting_for_payment ──customer pays (gateway)──▶ paid
  *   cancel: draft | pending | accepted | in_progress | waiting_for_alternative | waiting_for_payment ──▶ cancelled
+ *
+ *   Delivery, moved by the delivery company's webhook (Alshrouq, see canMoveDeliveryTo()):
+ *   paid ─▶ order_created ─▶ pending_driver_acceptance ─▶ driver_accepted ─▶ pending_order_preparation
+ *     ─▶ arrived_to_pickup ─▶ order_picked_up ─▶ arrived_to_dropoff ─▶ completed (delivered)
+ *   any of them ─▶ cancellation_processing ─▶ cancelled (never refunded automatically)
  *
  *   accepted | in_progress ──suggest alternative──▶ waiting_for_alternative, which then
  *   moves on as the status it paused would (accepted ─▶ in_progress, in_progress ─▶ completed)
@@ -78,7 +83,14 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * @property Carbon|null $accepted_at
  * @property Carbon|null $started_at
  * @property Carbon|null $purchased_at  the shopper bought the items (waiting for payment)
- * @property Carbon|null $completed_at  the customer paid
+ * @property Carbon|null $completed_at  delivered
+ * @property string|null $delivery_reference  the delivery company's order id
+ * @property string|null $delivery_status  the delivery company's last raw status
+ * @property Carbon|null $delivery_updated_at
+ * @property Carbon|null $delivery_dispatched_at  created at the delivery company
+ * @property array|null $delivery_data  the delivery company's create response
+ * @property array|null $delivery_driver  name, phone, tracking_url, location
+ * @property string|null $delivery_error  last failed dispatch
  * @property Carbon|null $cancelled_at
  * @property string|null $cancelled_by
  * @property string|null $cancellation_reason
@@ -100,22 +112,57 @@ class CustomOrder extends Model implements Payable
 
     public const STATUS_WAITING_FOR_PAYMENT = 'waiting_for_payment';   // shopper bought the items, customer to pay the invoice
 
-    public const STATUS_COMPLETED = 'completed';                       // paid
+    public const STATUS_PAID = 'paid';                                 // customer paid: handed to delivery
+
+    // Delivery (Alshrouq), after payment
+    public const STATUS_ORDER_CREATED = 'order_created';
+
+    public const STATUS_PENDING_DRIVER_ACCEPTANCE = 'pending_driver_acceptance';
+
+    public const STATUS_DRIVER_ACCEPTED = 'driver_accepted';
+
+    public const STATUS_PENDING_ORDER_PREPARATION = 'pending_order_preparation';
+
+    public const STATUS_ARRIVED_TO_PICKUP = 'arrived_to_pickup';
+
+    public const STATUS_ORDER_PICKED_UP = 'order_picked_up';
+
+    public const STATUS_ARRIVED_TO_DROPOFF = 'arrived_to_dropoff';
+
+    public const STATUS_COMPLETED = 'completed';                       // delivered
+
+    public const STATUS_CANCELLATION_PROCESSING = 'cancellation_processing';
 
     public const STATUS_CANCELLED = 'cancelled';
 
     public const STATUSES = [
         self::STATUS_DRAFT, self::STATUS_PENDING, self::STATUS_ACCEPTED,
         self::STATUS_IN_PROGRESS, self::STATUS_WAITING_FOR_ALTERNATIVE, self::STATUS_WAITING_FOR_PAYMENT,
-        self::STATUS_COMPLETED, self::STATUS_CANCELLED,
+        self::STATUS_PAID, self::STATUS_ORDER_CREATED, self::STATUS_PENDING_DRIVER_ACCEPTANCE,
+        self::STATUS_DRIVER_ACCEPTED, self::STATUS_PENDING_ORDER_PREPARATION, self::STATUS_ARRIVED_TO_PICKUP,
+        self::STATUS_ORDER_PICKED_UP, self::STATUS_ARRIVED_TO_DROPOFF, self::STATUS_COMPLETED,
+        self::STATUS_CANCELLATION_PROCESSING, self::STATUS_CANCELLED,
     ];
 
     /**
-     * Statuses a shopper is still (or may still be) working on.
+     * From payment to the door, in order. Delivery updates only move forward
+     * along it (see canMoveDeliveryTo()).
+     */
+    public const DELIVERY_FLOW = [
+        self::STATUS_PAID, self::STATUS_ORDER_CREATED, self::STATUS_PENDING_DRIVER_ACCEPTANCE,
+        self::STATUS_DRIVER_ACCEPTED, self::STATUS_PENDING_ORDER_PREPARATION, self::STATUS_ARRIVED_TO_PICKUP,
+        self::STATUS_ORDER_PICKED_UP, self::STATUS_ARRIVED_TO_DROPOFF, self::STATUS_COMPLETED,
+    ];
+
+    /**
+     * Statuses not finished yet: with the shopper, or paid and being delivered.
      */
     public const ACTIVE_STATUSES = [
         self::STATUS_PENDING, self::STATUS_ACCEPTED, self::STATUS_IN_PROGRESS,
         self::STATUS_WAITING_FOR_ALTERNATIVE, self::STATUS_WAITING_FOR_PAYMENT,
+        self::STATUS_PAID, self::STATUS_ORDER_CREATED, self::STATUS_PENDING_DRIVER_ACCEPTANCE,
+        self::STATUS_DRIVER_ACCEPTED, self::STATUS_PENDING_ORDER_PREPARATION, self::STATUS_ARRIVED_TO_PICKUP,
+        self::STATUS_ORDER_PICKED_UP, self::STATUS_ARRIVED_TO_DROPOFF, self::STATUS_CANCELLATION_PROCESSING,
     ];
 
     /**
@@ -124,8 +171,10 @@ class CustomOrder extends Model implements Payable
     public const HISTORY_STATUSES = [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
 
     /**
-     * Allowed status transitions: from => [to, ...]. `waiting_for_alternative`
-     * follows the status it paused (see resumeStatus()).
+     * Allowed status transitions by the customer / shopper: from => [to, ...].
+     * `waiting_for_alternative` follows the status it paused (see resumeStatus()).
+     * Once paid, only the delivery company moves the order (canMoveDeliveryTo()),
+     * so it can no longer be cancelled from the app.
      *
      * @var array<string, list<string>>
      */
@@ -135,10 +184,19 @@ class CustomOrder extends Model implements Payable
         self::STATUS_ACCEPTED    => [self::STATUS_IN_PROGRESS, self::STATUS_CANCELLED],
         self::STATUS_IN_PROGRESS => [self::STATUS_WAITING_FOR_PAYMENT, self::STATUS_CANCELLED],
         self::STATUS_WAITING_FOR_ALTERNATIVE => [],
-        // Completed only by the payment (markPaid()), never by the shopper
-        self::STATUS_WAITING_FOR_PAYMENT => [self::STATUS_COMPLETED, self::STATUS_CANCELLED],
-        self::STATUS_COMPLETED   => [],
-        self::STATUS_CANCELLED   => [],
+        // Paid only by the payment (markPaid()), never by the shopper
+        self::STATUS_WAITING_FOR_PAYMENT => [self::STATUS_PAID, self::STATUS_CANCELLED],
+        self::STATUS_PAID                      => [],
+        self::STATUS_ORDER_CREATED             => [],
+        self::STATUS_PENDING_DRIVER_ACCEPTANCE => [],
+        self::STATUS_DRIVER_ACCEPTED           => [],
+        self::STATUS_PENDING_ORDER_PREPARATION => [],
+        self::STATUS_ARRIVED_TO_PICKUP         => [],
+        self::STATUS_ORDER_PICKED_UP           => [],
+        self::STATUS_ARRIVED_TO_DROPOFF        => [],
+        self::STATUS_COMPLETED                 => [],
+        self::STATUS_CANCELLATION_PROCESSING   => [],
+        self::STATUS_CANCELLED                 => [],
     ];
 
     // Payment (same values as Order)
@@ -165,6 +223,8 @@ class CustomOrder extends Model implements Payable
     public const ACTOR_SHOPPER = 'shopper';
 
     public const ACTOR_SYSTEM = 'system';
+
+    public const ACTOR_DELIVERY = 'delivery';   // the delivery company (never refunded automatically)
 
     /**
      * @var array<int, string>
@@ -217,6 +277,13 @@ class CustomOrder extends Model implements Payable
         'started_at',
         'purchased_at',
         'completed_at',
+        'delivery_reference',
+        'delivery_status',
+        'delivery_updated_at',
+        'delivery_dispatched_at',
+        'delivery_data',
+        'delivery_driver',
+        'delivery_error',
         'cancelled_at',
         'cancelled_by',
         'cancellation_reason',
@@ -249,6 +316,10 @@ class CustomOrder extends Model implements Payable
         'started_at'            => 'datetime',
         'purchased_at'          => 'datetime',
         'completed_at'          => 'datetime',
+        'delivery_updated_at'   => 'datetime',
+        'delivery_dispatched_at' => 'datetime',
+        'delivery_data'         => 'array',
+        'delivery_driver'       => 'array',
         'cancelled_at'          => 'datetime',
     ];
 
@@ -421,6 +492,43 @@ class CustomOrder extends Model implements Payable
         $from = $this->isWaitingForAlternative() ? $this->resumeStatus() : $this->status;
 
         return in_array($status, self::TRANSITIONS[$from] ?? [], true);
+    }
+
+    /**
+     * Whether a delivery update may move the order to `$status`: only once paid
+     * and until delivered or cancelled; forward along DELIVERY_FLOW (updates may
+     * skip steps, and a late one never moves the order back), except back to
+     * waiting for a driver when the driver drops it before pickup. A cancellation
+     * (or one being processed) is accepted at any point; while one is processed
+     * the delivery may still resume.
+     */
+    public function canMoveDeliveryTo(string $status): bool
+    {
+        if (! $this->isPaid() || $status === $this->status || $status === self::STATUS_PAID) {
+            return false;
+        }
+
+        $current = $this->status === self::STATUS_CANCELLATION_PROCESSING
+            ? 0
+            : array_search($this->status, self::DELIVERY_FLOW, true);
+
+        if ($current === false || $this->status === self::STATUS_COMPLETED) {
+            return false;
+        }
+
+        if (in_array($status, [self::STATUS_CANCELLATION_PROCESSING, self::STATUS_CANCELLED], true)) {
+            return true;
+        }
+
+        $target = array_search($status, self::DELIVERY_FLOW, true);
+
+        if ($target === false) {
+            return false;
+        }
+
+        return $target > $current
+            || ($status === self::STATUS_PENDING_DRIVER_ACCEPTANCE
+                && $current < array_search(self::STATUS_ORDER_PICKED_UP, self::DELIVERY_FLOW, true));
     }
 
     public function isWaitingForAlternative(): bool
@@ -657,13 +765,14 @@ class CustomOrder extends Model implements Payable
     }
 
     /**
-     * Paid: an order waiting for its payment is completed. (A payment landing
-     * on a cancelled order only records it, to be refunded.)
+     * Paid: an order waiting for its payment becomes `paid`, ready for delivery
+     * (completed once delivered). A payment landing on a cancelled order only
+     * records it, to be refunded.
      */
     public function markPaid(?string $gateway, ?string $reference): void
     {
         if ($this->status === self::STATUS_WAITING_FOR_PAYMENT) {
-            $this->forceFill(['status' => self::STATUS_COMPLETED, 'completed_at' => now()]);
+            $this->forceFill(['status' => self::STATUS_PAID]);
         }
 
         $this->forceFill([

@@ -35,10 +35,15 @@ class NotificationService
         Order::STATUS_OUT_FOR_DELIVERY => ['notifications.order_out_for_delivery_title', 'notifications.order_out_for_delivery_body'],
         Order::STATUS_DELIVERED => ['notifications.order_delivered_title', 'notifications.order_delivered_body'],
         Order::STATUS_CANCELLED => ['notifications.order_cancelled_title', 'notifications.order_cancelled_body'],
+        // Delivered by the delivery company (Alshrouq); its other statuses get a generic text
+        Order::STATUS_DRIVER_ACCEPTED => ['notifications.order_driver_accepted_title', 'notifications.order_driver_accepted_body'],
+        Order::STATUS_ORDER_PICKED_UP => ['notifications.order_out_for_delivery_title', 'notifications.order_picked_up_body'],
+        Order::STATUS_ARRIVED_TO_DROPOFF => ['notifications.order_arrived_title', 'notifications.order_arrived_body'],
+        Order::STATUS_CANCELLATION_PROCESSING => ['notifications.order_cancellation_processing_title', 'notifications.order_cancellation_processing_body'],
     ];
 
     /**
-     * Custom order status set by the shopper => [title key, body key].
+     * Custom order status set by the shopper or the delivery company => [title key, body key].
      *
      * @var array<string, array{0: string, 1: string}>
      */
@@ -46,7 +51,11 @@ class NotificationService
         CustomOrder::STATUS_ACCEPTED    => ['notifications.custom_order_accepted_title', 'notifications.custom_order_accepted_body'],
         CustomOrder::STATUS_IN_PROGRESS => ['notifications.custom_order_in_progress_title', 'notifications.custom_order_in_progress_body'],
         CustomOrder::STATUS_WAITING_FOR_PAYMENT => ['notifications.custom_order_waiting_for_payment_title', 'notifications.custom_order_waiting_for_payment_body'],
+        CustomOrder::STATUS_DRIVER_ACCEPTED    => ['notifications.custom_order_driver_accepted_title', 'notifications.custom_order_driver_accepted_body'],
+        CustomOrder::STATUS_ORDER_PICKED_UP    => ['notifications.custom_order_picked_up_title', 'notifications.custom_order_picked_up_body'],
+        CustomOrder::STATUS_ARRIVED_TO_DROPOFF => ['notifications.custom_order_arrived_title', 'notifications.custom_order_arrived_body'],
         CustomOrder::STATUS_COMPLETED   => ['notifications.custom_order_completed_title', 'notifications.custom_order_completed_body'],
+        CustomOrder::STATUS_CANCELLATION_PROCESSING => ['notifications.custom_order_cancellation_processing_title', 'notifications.custom_order_cancellation_processing_body'],
         CustomOrder::STATUS_CANCELLED   => ['notifications.custom_order_declined_title', 'notifications.custom_order_declined_body'],
     ];
 
@@ -65,7 +74,13 @@ class NotificationService
      */
     public function notifyOrderStatus(Order $order, ?string $reason = null, ?string $previousStatus = null): ?NotificationContent
     {
-        $keys = self::ORDER_STATUS_KEYS[$order->status] ?? null;
+        $keys = match (true) {
+            // Cancelled by the delivery company, not by the store
+            $order->isCancelled() && $order->cancelled_by === Order::ACTOR_DELIVERY => ['notifications.order_delivery_cancelled_title', 'notifications.order_delivery_cancelled_body'],
+            isset(self::ORDER_STATUS_KEYS[$order->status]) => self::ORDER_STATUS_KEYS[$order->status],
+            in_array($order->status, Order::DELIVERY_STATUSES, true) => ['notifications.order_status_changed_title', 'notifications.order_status_changed_body'],
+            default => null,
+        };
 
         if ($keys === null) {
             return null;
@@ -78,6 +93,7 @@ class NotificationService
             'store_name' => $order->storeProfile?->store_name ?? '',
             'reason' => $reason ?? $order->cancellation_reason ?? '',
             'eta_max' => (string) ($order->estimated_minutes_max ?? ''),
+            'status' => ['key' => "orders.customer_statuses.{$order->status}.label"],
         ];
 
         return $this->send(
@@ -236,18 +252,37 @@ class NotificationService
     }
 
     /**
-     * Tell the customer the shopper moved their custom order on (accepted,
-     * shopping started, purchased) or declined it (with the reason). In-app +
-     * push; the data payload carries the new and previous status (and the
-     * reason) so the app can refresh the order screen.
+     * A custom order changed status (by its shopper or the delivery company):
+     * tell the customer and the assigned shopper. Each side is independent, so
+     * one failing never stops the other.
+     *
+     * @param  array{0: string, 1: string}|null  $customerKeys  overrides the customer's text
      */
-    public function notifyCustomOrderStatus(CustomOrder $order, ?string $previousStatus = null): ?NotificationContent
+    public function notifyCustomOrderStatusChanged(CustomOrder $order, ?string $previousStatus = null, ?array $customerKeys = null): void
     {
-        $keys = self::CUSTOM_ORDER_STATUS_KEYS[$order->status] ?? null;
-
-        if ($keys === null) {
-            return null;
+        foreach ([
+            'customer' => fn () => $this->notifyCustomOrderStatus($order, $previousStatus, $customerKeys),
+            'shopper'  => fn () => $this->notifyShopperCustomOrderStatus($order, $previousStatus),
+        ] as $side => $notify) {
+            try {
+                $notify();
+            } catch (\Throwable $e) {
+                Log::error("Custom order status notification to the {$side} failed", ['custom_order_id' => $order->id, 'error' => $e->getMessage()]);
+            }
         }
+    }
+
+    /**
+     * Tell the customer their custom order moved on: by the shopper (accepted,
+     * shopping started, purchased, declined with the reason) or the delivery
+     * company. Statuses without their own text get a generic one with the
+     * status label. In-app + push; the data payload carries the new and
+     * previous status (and the reason) so the app can refresh the order screen.
+     */
+    public function notifyCustomOrderStatus(CustomOrder $order, ?string $previousStatus = null, ?array $keys = null): ?NotificationContent
+    {
+        $keys ??= self::CUSTOM_ORDER_STATUS_KEYS[$order->status]
+            ?? ['notifications.custom_order_status_changed_title', 'notifications.custom_order_status_changed_body'];
 
         $order->loadMissing(['user', 'shopper']);
 
@@ -255,6 +290,7 @@ class NotificationService
             'order_number' => $order->order_number,
             'shopper_name' => $order->shopper?->name ?? '',
             'reason'       => $order->cancellation_reason ?? '',
+            'status'       => ['key' => 'custom_orders.statuses.'.$order->status],
         ];
 
         return $this->send(
@@ -269,6 +305,36 @@ class NotificationService
                 'reason'          => $order->status === CustomOrder::STATUS_CANCELLED ? $order->cancellation_reason : null,
             ]),
             sender: $order->shopper,
+        );
+    }
+
+    /**
+     * Tell the assigned shopper their order changed status (they moved it, or
+     * the delivery company did), with the driver's name once known.
+     */
+    public function notifyShopperCustomOrderStatus(CustomOrder $order, ?string $previousStatus = null): ?NotificationContent
+    {
+        $order->loadMissing(['user', 'shopper']);
+
+        if (! $order->shopper) {
+            return null;
+        }
+
+        $params = $this->customOrderParams($order) + [
+            'status' => ['key' => 'custom_orders.statuses.'.$order->status],
+        ];
+
+        return $this->send(
+            recipients: $order->shopper,
+            titleKey: 'notifications.custom_order_shopper_status_title',
+            bodyKey: 'notifications.custom_order_shopper_status_body',
+            titleParams: $params,
+            bodyParams: $params,
+            type: NotificationContent::TYPE_CUSTOM_ORDER,
+            data: $this->customOrderDeepLink($order) + array_filter([
+                'previous_status' => $previousStatus,
+                'driver_name'     => $order->delivery_driver['name'] ?? null,
+            ]),
         );
     }
 

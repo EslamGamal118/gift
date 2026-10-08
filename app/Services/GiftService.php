@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Log;
  *   0. details()             gift screen: store, product, greeting cards and the
  *                            financial summary of the current selection (quote())
  *   1. checkout()            order (pending_payment, one line, no delivery) + gift row, stock reserved
+ *                            (recipient_id set when a customer has the recipient's phone)
  *   2. gateway page          reuses the order payment flow (Al Rajhi / Tamara / Tabby)
  *   3. handlePaid()          called by PaymentService once per order when payment is confirmed:
  *                            gift -> paid, recipient account attached if it exists,
@@ -213,6 +214,8 @@ class GiftService
                 'recipient_name' => trim($data['recipient_name']),
                 'recipient_phone' => $data['recipient_phone'],
                 'recipient_email' => $data['recipient_email'] ?? null,
+                // Linked now so the sender sees "has an account"; claimed only once paid
+                'recipient_id' => $this->recipientAccount($data['recipient_phone'])?->id,
                 'gift_message' => $message,
                 'payment_status' => Order::PAYMENT_PENDING,
                 'payment_gateway' => $data['gateway'],
@@ -335,11 +338,21 @@ class GiftService
             return;
         }
 
-        $recipient = User::query()->forPhoneAndRole($gift->recipient_phone, User::TYPE_CUSTOMER)->first();
+        // Looked up again: the account may have been created or deleted since checkout
+        $recipient = $this->recipientAccount($gift->recipient_phone);
 
-        if ($recipient) {
-            $gift->forceFill(['recipient_id' => $recipient->id, 'is_claimed' => true, 'claimed_at' => now()])->save();
-        }
+        $gift->forceFill($recipient
+            ? ['recipient_id' => $recipient->id, 'is_claimed' => true, 'claimed_at' => now()]
+            : ['recipient_id' => null])->save();
+    }
+
+    /**
+     * The customer account registered with this normalized phone. Other roles
+     * (store, captain, shopper) can share the number but never receive gifts.
+     */
+    public function recipientAccount(string $phone): ?User
+    {
+        return User::query()->forPhoneAndRole($phone, User::TYPE_CUSTOMER)->first();
     }
 
     /**

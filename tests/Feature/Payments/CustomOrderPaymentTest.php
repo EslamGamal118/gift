@@ -48,6 +48,9 @@ class CustomOrderPaymentTest extends TestCase
     {
         parent::setUp();
 
+        // These tests check the delivery pricing itself (with free delivery off)
+        config(['checkout.free_delivery' => false]);
+
         foreach ([
             'ALRAJHI_BASE_URL' => 'https://alrajhi.test', 'ALRAJHI_TRANSPORTAL_ID' => 'T1', 'ALRAJHI_PASSWORD' => 'secret',
             'ALRAJHI_ENCRYPTION_KEY' => str_repeat('k', 32), 'ALRAJHI_IV' => 'iv-1234567890123',
@@ -192,8 +195,9 @@ class CustomOrderPaymentTest extends TestCase
         $this->paidWithTabby();
 
         $order = $this->order->fresh();
-        $this->assertSame([CustomOrder::STATUS_COMPLETED, 'paid'], [$order->status, $order->payment_status]);
-        $this->assertNotNull($order->completed_at);
+        $this->assertSame([CustomOrder::STATUS_PAID, 'paid'], [$order->status, $order->payment_status]);
+        $this->assertNotNull($order->paid_at);
+        $this->assertNull($order->completed_at);   // completed once delivered
         $this->assertSame(['notifications.custom_order_paid_title'], $this->notificationsOf($this->shopper));
 
         // Paid: the invoice is final
@@ -233,8 +237,8 @@ class CustomOrderPaymentTest extends TestCase
         $order = $this->order->fresh();
         $this->assertSame('paid', $order->payment_status);
         $this->assertNotNull($order->paid_at);
-        $this->assertSame(CustomOrder::STATUS_COMPLETED, $order->status);   // the payment completes the order
-        $this->assertNotNull($order->completed_at);
+        $this->assertSame(CustomOrder::STATUS_PAID, $order->status);   // completed once delivered
+        $this->assertNull($order->completed_at);
         $this->assertSame(['session_created', 'capture', 'captured'], $order->transactions()->orderBy('id')->pluck('event')->all());
         $this->assertSame(0, PaymentTransaction::query()->whereNotNull('order_id')->count());
 
@@ -354,7 +358,7 @@ class CustomOrderPaymentTest extends TestCase
             'pickup_address' => ['location_name' => 'Mall', 'city' => 'Riyadh', 'district' => 'Olaya', 'street' => 'Olaya St', 'building_number' => '1'],
             'shopper_fees' => 0,
             'items' => [['id' => $item->id, 'unit_price' => 1]],
-        ], ['Accept' => 'application/json'])->assertStatus(409)->assertJsonPath('data.current_status', 'completed');   // paid = completed
+        ], ['Accept' => 'application/json'])->assertStatus(409)->assertJsonPath('data.current_status', 'paid');
 
         $this->assertEquals(50, $item->fresh()->unit_price);
         $this->assertEquals(201.25, $this->order->fresh()->total_amount);
@@ -377,8 +381,8 @@ class CustomOrderPaymentTest extends TestCase
     }
 
     /**
-     * Paid orders are completed, so neither the customer nor the shopper can
-     * cancel them any more; support / an admin still can, which refunds.
+     * Paid orders are with the delivery company, so neither the customer nor the
+     * shopper can cancel them any more; support / an admin still can, which refunds.
      */
     protected function cancelBySupport(): void
     {
@@ -418,7 +422,7 @@ class CustomOrderPaymentTest extends TestCase
     {
         $this->paidWithTabby();
 
-        // Completed by the payment: no longer cancellable by the customer or the shopper
+        // Paid: no longer cancellable by the customer or the shopper
         Sanctum::actingAs($this->shopper);
         $this->postJson("/api/v1/shopper/orders/{$this->order->id}/status", ['status' => 'reject', 'cancellation_reason' => 'Shop closed'])->assertStatus(409);
         Sanctum::actingAs($this->customer);

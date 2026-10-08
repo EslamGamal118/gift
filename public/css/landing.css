@@ -1,0 +1,791 @@
+/* ==========================================================================
+   Tahadow landing page
+   ========================================================================== */
+
+:root {
+    --font: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+    --white: #FFFFFF;
+    --neutral-50: #F3F3F3;
+    --brand: #5B2A6E;
+    --brand-dark: #45204F;
+    --primary-500: #461959;
+    --primary-800: #270E31;
+    --neutral-500: #4B4B4B;
+    --neutral-100: #EDEDED;
+    --hero-max: 1440px;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--white);
+    color: var(--neutral-500);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* English pages use the Latin cut first */
+html[lang="en"] {
+    --font: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+/* ------------------------------ Hero section ------------------------------ */
+
+/* Design frame: 1440 × 1024. Wider screens get a centered 1440px box. */
+.hero {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1440px;
+    min-height: 100svh;
+    margin: 0 auto;
+    padding: 0;
+    overflow: hidden;
+    color: var(--white);
+    background-color: #1A0F1F; /* while the image loads */
+}
+
+/* Background image: fills the box, cropped (never stretched) around the center */
+.hero__bg {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* #000 overlay fading to fully transparent at the bottom */
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg, rgba(0, 0, 0, .65) 0%, rgba(0, 0, 0, .40) 55%, rgba(0, 0, 0, 0) 100%);
+    pointer-events: none;
+}
+
+/* Desktop: lock the 1440:1024 proportions — exactly 1440 × 1024 at ≥1440px */
+@media (min-width: 1101px) {
+    .hero {
+        height: auto;
+        min-height: 0;
+        aspect-ratio: 1440 / 1024;
+    }
+}
+
+/*
+ * Desktop: the Arabic title is one line, as in Figma. At 64px it measures 890px,
+ * 4px over the 886px box, which alone made it wrap; the overflow is split evenly
+ * (2px a side) and invisible. English (~1350px) keeps its balanced two lines.
+ */
+@media (min-width: 1101px) {
+    html[lang="ar"] .hero__title {
+        white-space: nowrap;
+    }
+}
+
+/* -------------------------------- Navbar -------------------------------- */
+
+/*
+ * Figma: 1440 × 142, padding 24 / 32, space-between.
+ * logo | links | (switch + Vision 2030): the links' auto margins split the free
+ * space evenly on both sides, like Figma's justify-between with three items.
+ */
+.hero__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    width: 100%;
+    max-width: var(--hero-max);
+    height: 142px;
+    margin-inline: auto;
+    padding: 24px 32px;
+    background: transparent;
+}
+
+.hero__brand {
+    display: block;
+    flex: none;
+    width: 96.76px;
+    height: 79.98px;
+}
+
+.hero__brand img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.hero__menu {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 24px;
+    min-width: 0;
+}
+
+/* Links: hug 628 × 23, gap 32 */
+.hero__links {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+}
+
+.hero__links a {
+    display: block;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--neutral-50);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .2s;
+}
+
+.hero__links a:hover {
+    color: var(--white);
+}
+
+.hero__links a.is-active {
+    font-weight: 600;
+    color: var(--white);
+}
+
+.hero__aside {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 24px;
+}
+
+/*
+ * Language switcher (Figma "filter selector"): 134 × 40, radius 16, 1px white
+ * border, padding 4. Figma strokes sit inside the box without taking space,
+ * hence the inset shadow instead of a border: the two segments get 63px each.
+ */
+.lang-switch {
+    display: flex;
+    flex: none;
+    align-items: center;
+    width: 134px;
+    height: 40px;
+    padding: 4px;
+    background: transparent;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 1px var(--white);
+}
+
+/* _Button base: 63 × 32 (fill), radius 32, padding 4 / 8, gap 6 */
+.lang-switch__option {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 32px;
+    padding: 4px 8px;
+    font-family: "IBM Plex Sans", "IBM Plex Sans Arabic", sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--white);
+    text-decoration: none;
+    white-space: nowrap;
+    background: transparent;
+    border-radius: 32px;
+    transition: background-color .2s;
+}
+
+.lang-switch__option[lang="ar"] {
+    font-family: "IBM Plex Sans Arabic", "IBM Plex Sans", sans-serif;
+}
+
+.lang-switch__option:not(.is-active):hover {
+    background: rgba(255, 255, 255, .15);
+}
+
+.lang-switch__option.is-active {
+    background: var(--primary-500);
+}
+
+.lang-switch__option:focus-visible {
+    border-radius: 32px;
+}
+
+.hero__vision {
+    flex: none;
+    width: 112px;
+    height: 92.44px;
+    object-fit: contain;
+}
+
+/* Mobile menu toggle (hidden on desktop) */
+.hero__toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    background: rgba(255, 255, 255, .12);
+    border: 1px solid rgba(255, 255, 255, .25);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.hero__toggle span {
+    display: block;
+    height: 2px;
+    background: var(--white);
+    border-radius: 2px;
+    transition: transform .2s, opacity .2s;
+}
+
+/* ------------------------------- Content -------------------------------- */
+
+/* Fills the space under the navbar and centers the copy block */
+.hero__content {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0 16px 142px; /* offsets the navbar so the block sits in the optical center */
+}
+
+/* Figma: 886 × 325 (hug) = title 166 + gap 40 + subtitle 31 + gap 40 + button 48 */
+.hero__copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    width: 100%;
+    max-width: 886px;
+}
+
+/* 886 × 166, centered. Wraps (balanced) only where it doesn't fit — see the desktop rule below */
+.hero__title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 166px;
+    margin: 0;
+    font-size: 64px;
+    font-weight: 600;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--white);
+    text-align: center;
+    text-wrap: balance;
+}
+
+/* 886 × 31, start-aligned (right in Arabic, left in English) */
+.hero__subtitle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 31px;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--white);
+    text-align: start;
+}
+
+/* 176 × 48, radius 12, padding 0 16, primary-500 */
+.hero__cta {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 176px;
+    height: 48px;
+    padding: 0 16px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 100%;
+    color: var(--white);
+    text-decoration: none;
+    white-space: nowrap;
+    background: var(--primary-500);
+    border-radius: 12px;
+    transition: background-color .2s;
+}
+
+.hero__cta:hover {
+    background: var(--primary-800);
+}
+
+.hero a:focus-visible,
+.hero button:focus-visible {
+    outline: 2px solid var(--white);
+    outline-offset: 4px;
+    border-radius: 6px;
+}
+
+.hero__cta:focus-visible {
+    border-radius: 12px;
+}
+
+/* ---------------- About / Goals / Vision (1320px container) ---------------- */
+
+/*
+ * Page body under the hero — Figma: fill 1440 × hug, padding 88 / 60, gap 120,
+ * top-to-bottom gradient over its whole height. 1440 wide like the hero, so the
+ * two line up on wider screens; content inside stays 1320.
+ */
+.intro {
+    display: flex;
+    flex-direction: column;
+    gap: 120px;
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding: 88px 60px;
+    background: linear-gradient(180deg, #FFE8D1 0%, #FCF7FC 25%, #F5F0F7 50%, #F7F0F5 75%, #F2D9E5 100%);
+}
+
+.feature {
+    display: flex;
+    gap: 40px;
+    align-items: stretch;
+    width: 100%;
+    scroll-margin-top: 24px;
+}
+
+.feature__body {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 24px;
+    min-width: 0;
+    text-align: start;
+}
+
+.feature__title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--primary-800);
+}
+
+.feature__text,
+.feature__list {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 160%;
+    letter-spacing: 0;
+    color: var(--neutral-500);
+}
+
+.feature__list {
+    padding: 0;
+    list-style: none;
+}
+
+.feature__body .feature__text + .feature__list {
+    margin-top: -16px; /* intro and its bullets read as one block */
+}
+
+.feature__list li {
+    position: relative;
+    padding-inline-start: 1.4em;
+}
+
+.feature__list--numbered {
+    counter-reset: goal;
+}
+
+.feature__list--numbered li {
+    counter-increment: goal;
+}
+
+.feature__list--numbered li::before {
+    content: counter(goal) ".";
+    position: absolute;
+    inset-inline-start: 0;
+    font-weight: 600;
+    color: var(--primary-800);
+}
+
+.feature__list--bulleted li::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: .35em;
+    top: .7em;
+    width: 8px;
+    height: 8px;
+    background: var(--primary-800);
+    border-radius: 50%;
+}
+
+.feature__media {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 313px;
+    margin: 0;
+    overflow: hidden;
+    border-radius: 24px;
+    background: #EFE7DC;
+}
+
+#vision .feature__media {
+    min-height: 370px;
+}
+
+.feature__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* --------------------------- How we serve you --------------------------- */
+
+.services {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 48px;
+    width: 100%;
+    scroll-margin-top: 24px;
+}
+
+.services__header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 555px;
+    text-align: center;
+}
+
+/* 555 × 42 */
+.services__title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    margin: 0;
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--primary-800);
+}
+
+/* 555 × 38 */
+.services__subtitle {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 160%;
+    letter-spacing: 0;
+    color: var(--neutral-500);
+}
+
+/* Fill 1320 × hug 263, 3 cards of 424 with 24px gaps */
+.services__list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/*
+ * 424 × 263 (hug) = padding 24 + icon 100 + 16 + title 31 + 16 + text 52 + padding 24.
+ * The 1px border is drawn inside like Figma's stroke, so the content stays 392px wide.
+ */
+.service-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 16px;
+    text-align: center;
+    background: var(--white);
+    border-radius: 20px;
+    box-shadow: inset 0 0 0 1px var(--neutral-100);
+}
+
+.service-card__icon {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+}
+
+/* hug 130 × 31 */
+.service-card__title {
+    display: flex;
+    align-items: center;
+    min-height: 31px;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 100%;
+    letter-spacing: 0;
+    color: var(--primary-800);
+}
+
+/* 392 × 52: two lines at 16 / 160% */
+.service-card__text {
+    width: 100%;
+    min-height: 52px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 160%;
+    letter-spacing: 0;
+    color: var(--neutral-500);
+}
+
+/* ------------------------------ Responsive ------------------------------ */
+
+/* English labels run ~115px wider than Arabic: tighten them before the burger menu kicks in */
+@media (min-width: 1101px) and (max-width: 1240px) {
+    html[lang="en"] .hero__links {
+        gap: 20px;
+    }
+
+    html[lang="en"] .hero__links a {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .hero__nav {
+        position: relative;
+        height: auto;
+        padding: 16px 20px;
+    }
+
+    .hero__brand {
+        width: 80px;
+        height: 66px;
+    }
+
+    .hero__toggle {
+        display: flex;
+    }
+
+    .hero__menu {
+        position: absolute;
+        inset: 100% 16px auto;
+        z-index: 10;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 20px;
+        padding: 20px;
+        background: rgba(26, 15, 31, .92);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, .12);
+        border-radius: 16px;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity .2s, transform .2s, visibility .2s;
+    }
+
+    .hero__nav.is-open .hero__menu {
+        visibility: visible;
+        opacity: 1;
+        transform: none;
+    }
+
+    .hero__nav.is-open .hero__toggle span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hero__nav.is-open .hero__toggle span:nth-child(2) { opacity: 0; }
+    .hero__nav.is-open .hero__toggle span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    .hero__links {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        margin: 0;
+    }
+
+    .hero__links a {
+        display: block;
+        padding: 12px 8px;
+        font-size: 18px;
+    }
+
+    .hero__aside {
+        justify-content: space-between;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, .12);
+    }
+
+    .hero__vision {
+        width: 88px;
+        height: 72px;
+    }
+
+    .hero__content {
+        padding-bottom: 96px;
+    }
+
+    .hero__copy {
+        gap: 24px;
+    }
+
+    .hero__title {
+        min-height: 0;
+        font-size: clamp(36px, 6vw, 56px);
+        line-height: 1.15;
+    }
+
+    /* Wraps to several lines here, so it follows the centered title */
+    .hero__subtitle {
+        justify-content: center;
+        min-height: 0;
+        font-size: clamp(17px, 2.4vw, 22px);
+        line-height: 1.5;
+        text-align: center;
+    }
+}
+
+@media (max-width: 1100px) {
+    .intro {
+        gap: 88px;
+        padding: 64px 32px;
+    }
+
+    .feature__title {
+        font-size: 28px;
+    }
+
+    .feature__text,
+    .feature__list {
+        font-size: 20px;
+    }
+}
+
+/* Stack: image on top, text below */
+@media (max-width: 860px) {
+    .services {
+        gap: 32px;
+    }
+
+    .services__title {
+        font-size: 32px;
+    }
+
+    .services__subtitle {
+        font-size: 20px;
+    }
+
+    .services__list {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        max-width: 480px;
+        margin-inline: auto;
+    }
+
+    .feature {
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .feature__media,
+    #vision .feature__media {
+        order: -1;
+        flex: none;
+        min-height: 0;
+        aspect-ratio: 16 / 9;
+    }
+
+    .feature__body {
+        gap: 16px;
+    }
+
+    .feature__body .feature__text + .feature__list {
+        margin-top: -8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .intro {
+        gap: 64px;
+        padding: 48px 16px;
+    }
+
+    .feature__title {
+        font-size: 24px;
+    }
+
+    .feature__text,
+    .feature__list {
+        font-size: 17px;
+    }
+
+    .feature__media {
+        border-radius: 16px;
+    }
+
+    .services__title {
+        font-size: 28px;
+    }
+
+    .services__subtitle {
+        font-size: 17px;
+    }
+
+    .service-card__icon {
+        width: 80px;
+        height: 80px;
+    }
+
+    .service-card__title {
+        font-size: 20px;
+    }
+
+    .hero__content {
+        padding-bottom: 64px;
+    }
+
+    .hero__copy {
+        gap: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero *,
+    .hero *::before,
+    .hero *::after {
+        transition: none !important;
+    }
+}

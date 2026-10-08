@@ -37,6 +37,7 @@ trait DescribesCustomOrder
             'name'   => $shopper?->name,
             'photo'  => $this->fileUrl($profile?->personal_photo ?: $shopper?->avatar),
             'bio'    => $profile?->bio,
+            'phone'  => $shopper?->phone,
             'rating' => [
                 'average' => round((float) ($profile?->rating_avg ?? 0), 1),
                 'count'   => (int) ($profile?->rating_count ?? 0),
@@ -88,16 +89,38 @@ trait DescribesCustomOrder
 
         return $address ? [
             'id'              => $address->id,
-            'location_name'   => $address->location_name,
             'city'            => $address->city,
             'district'        => $address->district,
-            'street'          => $address->street,
-            'building_number' => $address->building_number,
             'full_address'    => $address->toLine(),
-            'phone'           => $address->phone,
-            'latitude'        => $address->latitude !== null ? (float) $address->latitude : null,
-            'longitude'       => $address->longitude !== null ? (float) $address->longitude : null,
         ] : null;
+    }
+
+    /**
+     * Delivery by the delivery company (Alshrouq) once the order was sent to
+     * it, with the latest driver details; null before.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function deliveryTracking(): ?array
+    {
+        if (! $this->delivery_reference) {
+            return null;
+        }
+
+        $driver = (array) $this->delivery_driver;
+
+        return [
+            'provider'       => 'alshrouq',
+            'reference'      => $this->delivery_reference,
+            'provider_status' => $this->delivery_status,
+            'updated_at'     => $this->delivery_updated_at?->toIso8601String(),
+            'driver'         => $driver ? [
+                'name'         => $driver['name'] ?? null,
+                'phone'        => $driver['phone'] ?? null,
+                'tracking_url' => $driver['tracking_url'] ?? null,
+                'location'     => $driver['location'] ?? null,
+            ] : null,
+        ];
     }
 
     /**

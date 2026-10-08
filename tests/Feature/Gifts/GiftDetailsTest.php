@@ -65,7 +65,7 @@ class GiftDetailsTest extends TestCase
         return '/api/v1/gifts/details/'.($productId ?? $this->gift->id).($query ? '?'.http_build_query($query) : '');
     }
 
-    public function test_it_returns_the_store_the_gift_its_cards_and_the_summary(): void
+    public function test_it_returns_the_store_the_gift_and_the_summary_without_cards(): void
     {
         Sanctum::actingAs($this->customer);
 
@@ -79,8 +79,7 @@ class GiftDetailsTest extends TestCase
         $this->assertSame($this->special->id, $data['gift']['category']['id']);
         $this->assertSame(5, $data['gift']['max_quantity']);
 
-        $this->assertSame([$this->card->id], array_column($data['cards'], 'id'));
-        $this->assertFalse($data['cards'][0]['is_selected']);
+        $this->assertArrayNotHasKey('cards', $data);
 
         $this->assertEquals(['subtotal' => 200, 'delivery_fee' => 0, 'discount' => 0, 'tax' => 30, 'total' => 230], array_intersect_key($data['summary'], array_flip(['subtotal', 'delivery_fee', 'discount', 'tax', 'total'])));
         $this->assertTrue($data['can_checkout']);
@@ -95,7 +94,6 @@ class GiftDetailsTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        $this->assertTrue($data['cards'][0]['is_selected']);
         $this->assertSame(['quantity' => 2, 'addon_ids' => [$this->card->id], 'promo_code' => 'GIFT10'], $data['selection']);
         $this->assertSame('GIFT10', $data['promo']['code']);
         $this->assertNull($data['promo_error']);

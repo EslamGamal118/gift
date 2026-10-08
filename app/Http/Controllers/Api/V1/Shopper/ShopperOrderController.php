@@ -87,7 +87,11 @@ class ShopperOrderController extends Controller
         );
 
         return ApiResponse::success(
-            $request->withInvoice() ? 'custom_orders.invoice_submitted' : 'custom_orders.status_updated',
+            match (true) {
+                $request->withInvoice() => 'custom_orders.invoice_submitted',
+                $request->status() === ShopperOrderService::ACTION_SEND_TO_DRIVER => 'custom_orders.sent_to_driver',
+                default => 'custom_orders.status_updated',
+            },
             new ShopperOrderResource($order),
         );
     }

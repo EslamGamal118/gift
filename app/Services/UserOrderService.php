@@ -67,6 +67,25 @@ class UserOrderService
     }
 
     /**
+     * The list's tabs ("الحالية" / "السابقة") with how many orders each holds
+     * for the same keyword.
+     *
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    public function tabs(User $customer, string $type, ?string $search = null): array
+    {
+        $query = $type === self::TYPE_CUSTOM
+            ? CustomOrder::query()->forCustomer($customer->id)
+            : Order::query()->forUser($customer->id);
+
+        return array_map(fn (string $tab) => [
+            'key'   => $tab,
+            'label' => __('orders.tabs.'.$tab),
+            'count' => (clone $query)->whereIn('status', self::TAB_STATUSES[$tab][$type])->matchingKeyword($search)->count(),
+        ], self::TABS);
+    }
+
+    /**
      * One of the customer's orders of the given type, loaded for the details
      * screen, or 404. Unlike the list, drafts and unpaid orders are reachable.
      *

@@ -25,7 +25,8 @@ class StoreOrderSeederTest extends TestCase
 
         $this->assertCount(14, $orders);
         $this->assertSame(14, Order::query()->forStore($store->id)->visibleToStore()->count());
-        $this->assertEqualsCanonicalizing(array_keys(Order::STORE_BADGES), $orders->pluck('status')->unique()->values()->all());
+        // Every status the store moves an order through (the delivery company's own come from its webhook)
+        $this->assertEqualsCanonicalizing(array_values(array_diff(array_keys(Order::STORE_BADGES), Order::DELIVERY_STATUSES)), $orders->pluck('status')->unique()->values()->all());
         $this->assertTrue(Product::query()->where('store_id', $store->id)->exists());
 
         foreach ($orders as $order) {

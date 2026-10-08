@@ -258,6 +258,10 @@ class DeliverySchedulingService
 
     public function instantFee(): float
     {
+        if (DeliveryCalculatorService::isFree()) {
+            return 0.0;
+        }
+
         return round((float) ($this->config['instant']['fee'] ?? 0), 2);
     }
 

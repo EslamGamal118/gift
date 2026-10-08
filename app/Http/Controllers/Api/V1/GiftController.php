@@ -36,7 +36,7 @@ class GiftController extends Controller
     /**
      * GET /api/v1/gifts/details/{product}?quantity=&addon_ids[]=&promo_code=
      *
-     * Gift details / payment screen: store, gift, greeting cards and the
+     * Gift details / payment screen: store, gift, selection and the
      * financial summary of the selection. Call again whenever the selection
      * changes; POST /gifts/checkout with the same selection charges this total.
      */
