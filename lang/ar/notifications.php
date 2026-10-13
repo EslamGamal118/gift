@@ -116,4 +116,34 @@ return [
         'all_marked_read' => 'تم تحديد جميع الإشعارات كمقروءة.',
     ],
 
+    // المتاجر - قرارات الإدارة والتحويلات
+    'store_approved_title'    => 'تم اعتماد متجرك',
+    'store_approved_body'     => 'مبروك! تم اعتماد متجر :store_name وأصبح ظاهرًا للعملاء.',
+    'store_rejected_title'    => 'تعذّر اعتماد متجرك',
+    'store_rejected_body'     => 'لم يتم اعتماد متجر :store_name. السبب: :reason',
+    'store_suspended_title'   => 'تم تعطيل متجرك',
+    'store_suspended_body'    => 'تم تعطيل متجر :store_name مؤقتًا. السبب: :reason',
+    'store_reactivated_title' => 'تمت إعادة تفعيل متجرك',
+    'store_reactivated_body'  => 'تمت إعادة تفعيل متجر :store_name ويمكنك استقبال الطلبات مجددًا.',
+    'store_payout_title'      => 'تم تحويل مستحقاتك',
+    'store_payout_body'       => 'تم تحويل :amount :currency إلى حسابك عن :orders_count طلب.',
+
+    // المتسوق الشخصي - قرارات الإدارة والتحويلات
+    'shopper_approved_title'    => 'تم قبول حسابك',
+    'shopper_approved_body'     => 'تم قبول حسابك كمتسوق شخصي، يمكنك الآن استقبال الطلبات الخاصة.',
+    'shopper_rejected_title'    => 'تم رفض طلب الانضمام',
+    'shopper_rejected_body'     => 'عفواً، تم رفض طلب انضمامك كمتسوق شخصي. السبب: :reason',
+    'shopper_suspended_title'   => 'تم تعطيل حسابك',
+    'shopper_suspended_body'    => 'تم تعطيل حسابك كمتسوق شخصي مؤقتًا. السبب: :reason',
+    'shopper_reactivated_title' => 'تمت إعادة تفعيل حسابك',
+    'shopper_reactivated_body'  => 'تمت إعادة تفعيل حسابك كمتسوق شخصي، يمكنك استقبال الطلبات الخاصة مجددًا.',
+    'shopper_payout_title'      => 'تم تحويل مستحقاتك',
+    'shopper_payout_body'       => 'تم تحويل :amount :currency إلى حسابك عن :orders_count طلب.',
+
+    // العميل - إلغاء الطلب من قبل إدارة التطبيق
+    'order_admin_cancelled_title'  => 'تم إلغاء طلبك رقم :order_number',
+    'order_admin_cancelled_body'   => 'تم إلغاء طلبك رقم :order_number من قبل إدارة التطبيق. السبب: :reason',
+    'custom_order_admin_cancelled_title' => 'تم إلغاء طلبك رقم :order_number',
+    'custom_order_admin_cancelled_body'  => 'تم إلغاء طلبك الخاص رقم :order_number من قبل إدارة التطبيق. السبب: :reason',
+
 ];

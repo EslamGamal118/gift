@@ -53,6 +53,7 @@ class Review extends Model
         'store_comment',
         'products_rating',
         'products_comment',
+        'is_visible',
     ];
 
     /**
@@ -61,6 +62,7 @@ class Review extends Model
     protected $casts = [
         'store_rating'    => 'integer',
         'products_rating' => 'integer',
+        'is_visible'      => 'boolean',
     ];
 
     /**

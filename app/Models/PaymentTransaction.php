@@ -85,6 +85,18 @@ class PaymentTransaction extends Model
     }
 
     /**
+     * Transactions paid by a customer: a transaction belongs to a store order,
+     * a custom order or a multi-store checkout, each carrying the customer's user_id.
+     */
+    public function scopeForCustomer(Builder $query, int $userId): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->whereHas('order', fn (Builder $order) => $order->where('user_id', $userId))
+            ->orWhereHas('customOrder', fn (Builder $order) => $order->where('user_id', $userId))
+            ->orWhereHas('checkoutGroup', fn (Builder $group) => $group->where('user_id', $userId)));
+    }
+
+    /**
      * The store order, custom order or checkout this interaction was for.
      */
     public function payable(): ?Payable

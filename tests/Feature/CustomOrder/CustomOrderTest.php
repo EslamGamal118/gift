@@ -340,8 +340,10 @@ class CustomOrderTest extends TestCase
 
         $this->actingAs($this->customer, 'sanctum')
             ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
-                'address'     => ['city' => 'Jeddah', 'district' => 'Al Rawdah', 'street' => 'Tahlia', 'building_number' => '7', 'latitude' => 21.5, 'longitude' => 39.2],
-                'delivery_at' => now()->addDays(2)->setTime(18, 30)->format('Y-m-d H:i'),
+                'address'          => ['city' => 'Jeddah', 'district' => 'Al Rawdah', 'street' => 'Tahlia', 'building_number' => '7', 'latitude' => 21.5, 'longitude' => 39.2],
+                'delivery_type'    => 'scheduled',
+                'delivery_date'    => now()->addDays(2)->toDateString(),
+                'delivery_slot_id' => $this->slot('18:00:00', '20:00:00')->id,
             ])
             ->assertOk()
             ->assertJsonPath('message', __('custom_orders.confirmed_bidding'))
@@ -410,6 +412,7 @@ class CustomOrderTest extends TestCase
         $response = $this->actingAs($this->customer, 'sanctum')
             ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
                 'delivery_address_id' => $address->id,      // the column's name is accepted for address_id
+                'delivery_type'      => 'scheduled',
                 'delivery_date'      => $date,
                 'delivery_slot_id'   => $slot->id,
                 'confirmation_notes' => '  Call me when you arrive  ',
@@ -442,6 +445,7 @@ class CustomOrderTest extends TestCase
         $this->assertSame($address->id, $order->deliveryAddress->id);
         $this->assertNull($order->pickup_address_id);
         $this->assertSame($slot->id, $order->delivery_slot_id);
+        $this->assertSame('scheduled', $order->delivery_type);
         $this->assertSame('09:00', $order->delivery_window_start->format('H:i'));
         $this->assertSame('11:00', $order->delivery_window_end->format('H:i'));
 
@@ -450,7 +454,7 @@ class CustomOrderTest extends TestCase
 
         // Already confirmed -> 409
         $this->actingAs($this->customer, 'sanctum')
-            ->postJson("/api/v1/custom-orders/{$order->id}/confirm", ['address_id' => $address->id, 'delivery_date' => $date, 'delivery_slot_id' => $slot->id])
+            ->postJson("/api/v1/custom-orders/{$order->id}/confirm", ['address_id' => $address->id, 'delivery_type' => 'scheduled', 'delivery_date' => $date, 'delivery_slot_id' => $slot->id])
             ->assertStatus(409)
             ->assertJsonPath('message', __('custom_orders.not_confirmable', ['status' => 'Waiting for shopper']));
     }
@@ -458,7 +462,10 @@ class CustomOrderTest extends TestCase
     public function test_confirm_requires_a_shopper_choice_and_an_available_shopper(): void
     {
         $address = $this->address();
-        $payload = ['address_id' => $address->id, 'delivery_at' => now()->addDay()->format('Y-m-d H:i')];
+        $payload = [
+            'address_id' => $address->id, 'delivery_type' => 'scheduled',
+            'delivery_date' => now()->addDay()->toDateString(), 'delivery_slot_id' => $this->slot('09:00:00', '11:00:00')->id,
+        ];
 
         // Step 2 skipped
         $order = CustomOrder::factory()->create(['user_id' => $this->customer->id]);
@@ -495,7 +502,7 @@ class CustomOrderTest extends TestCase
         $shopper = $this->shopper();
         $order   = CustomOrder::factory()->create(['user_id' => $this->customer->id, 'shopper_id' => $shopper->id, 'assignment_mode' => 'direct']);
 
-        // Nothing sent: an address and a delivery time (or slot) are required
+        // Nothing sent: an address and a delivery type are required
         $errors = $this->actingAs($this->customer, 'sanctum')
             ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [])
             ->assertUnprocessable()
@@ -503,25 +510,34 @@ class CustomOrderTest extends TestCase
 
         $this->assertArrayHasKey('address_id', $errors);
         $this->assertArrayHasKey('address', $errors);
-        $this->assertArrayHasKey('delivery_at', $errors);
-        $this->assertArrayHasKey('delivery_slot_id', $errors);
+        $this->assertArrayHasKey('delivery_type', $errors);
         $this->assertSame(__('custom_orders.address_required'), $errors['address_id'][0]);
-        $this->assertSame(__('custom_orders.delivery_required'), $errors['delivery_at'][0]);
 
-        // Exact time too soon, slot without a date, unknown slot, inline address without a city
+        // Scheduled without a date, unknown slot, inline address without a city
         $errors = $this->actingAs($this->customer, 'sanctum')
             ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
                 'address'          => ['district' => 'Olaya'],
-                'delivery_at'      => now()->addMinutes(5)->format('Y-m-d H:i'),
+                'delivery_type'    => 'scheduled',
                 'delivery_slot_id' => 999,
             ])
             ->assertUnprocessable()
             ->json('data.errors');
 
         $this->assertArrayHasKey('address.city', $errors);
-        $this->assertArrayHasKey('delivery_at', $errors);
         $this->assertArrayHasKey('delivery_date', $errors);
         $this->assertArrayHasKey('delivery_slot_id', $errors);
+
+        // Same values as checkout: "now" is not one of them; the old exact time is no longer read
+        $errors = $this->actingAs($this->customer, 'sanctum')
+            ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
+                'address_id'    => $this->address()->id,
+                'delivery_type' => 'now',
+                'delivery_at'   => now()->addDay()->format('Y-m-d H:i'),
+            ])
+            ->assertUnprocessable()
+            ->json('data.errors');
+
+        $this->assertSame(['delivery_type'], array_keys($errors));
 
         // A slot that has already started today is not available
         $passed = $this->slot('00:00:00', '00:30:00');
@@ -529,6 +545,7 @@ class CustomOrderTest extends TestCase
         $this->actingAs($this->customer, 'sanctum')
             ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
                 'address_id'       => $this->address()->id,
+                'delivery_type'    => 'scheduled',
                 'delivery_date'    => now(config('checkout.delivery.timezone'))->toDateString(),
                 'delivery_slot_id' => $passed->id,
             ])
@@ -537,6 +554,54 @@ class CustomOrderTest extends TestCase
 
         $this->assertSame('draft', $order->fresh()->status);
         $this->assertSame(0, AppNotification::query()->where('notifiable_id', $shopper->id)->count());
+    }
+
+    public function test_confirm_accepts_instant_delivery_like_checkout(): void
+    {
+        $shopper = $this->shopper();
+        $address = $this->address();
+        $draft   = fn () => CustomOrder::factory()->create(['user_id' => $this->customer->id, 'shopper_id' => $shopper->id, 'assignment_mode' => 'direct']);
+        $order   = $draft();
+
+        // No date / slot needed (one sent is ignored); the window is the instant ETA, as for store orders
+        config(['checkout.delivery.instant' => ['enabled' => true, 'fee' => 10, 'eta_min' => 30, 'eta_max' => 45]]);
+
+        $this->actingAs($this->customer, 'sanctum')
+            ->postJson("/api/v1/custom-orders/{$order->id}/confirm", [
+                'address_id' => $address->id, 'delivery_type' => 'instant', 'delivery_slot_id' => $this->slot('09:00:00', '11:00:00')->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.delivery_type', 'instant');
+
+        $order->refresh();
+        $now = now(config('checkout.delivery.timezone'));
+        $this->assertSame('instant', $order->delivery_type);
+        $this->assertNull($order->delivery_slot_id);
+        $this->assertSame($now->toDateString(), $order->delivery_date->toDateString());
+        // Stored as local (delivery timezone) wall time, like store orders' windows
+        $local = fn ($at) => \Illuminate\Support\Carbon::parse($at->format('Y-m-d H:i:s'), $now->timezone);
+        $this->assertEqualsWithDelta(30, $now->diffInMinutes($local($order->delivery_window_start)), 1);
+        $this->assertEqualsWithDelta(45, $now->diffInMinutes($local($order->delivery_window_end)), 1);
+
+        // The checkout toggle (`instant: true`) is accepted too
+        $this->actingAs($this->customer, 'sanctum')
+            ->postJson("/api/v1/custom-orders/{$draft()->id}/confirm", ['address_id' => $address->id, 'instant' => true])
+            ->assertOk()
+            ->assertJsonPath('data.delivery_type', 'instant');
+    }
+
+    public function test_confirm_refuses_instant_delivery_when_checkout_has_it_off(): void
+    {
+        config(['checkout.delivery.instant.enabled' => false]);
+        $order = CustomOrder::factory()->create(['user_id' => $this->customer->id, 'shopper_id' => $this->shopper()->id, 'assignment_mode' => 'direct']);
+
+        $this->actingAs($this->customer, 'sanctum')
+            ->postJson("/api/v1/custom-orders/{$order->id}/confirm", ['address_id' => $this->address()->id, 'delivery_type' => 'instant'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', __('checkout.instant_unavailable'));
+
+        $this->assertSame('draft', $order->fresh()->status);
     }
 
     /*

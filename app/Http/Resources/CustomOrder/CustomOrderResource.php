@@ -4,6 +4,7 @@ namespace App\Http\Resources\CustomOrder;
 
 use App\Http\Resources\Concerns\ResolvesFileUrls;
 use App\Http\Resources\CustomOrder\Concerns\DescribesCustomOrder;
+use App\Models\Cart;
 use App\Models\CustomOrder;
 use App\Support\Money;
 use Illuminate\Http\Request;
@@ -49,6 +50,7 @@ class CustomOrderResource extends JsonResource
 ] : null,
 
             'delivery_at'  => $this->delivery_at?->toIso8601String(),
+            'delivery_type' => $this->delivery_type ?? Cart::DELIVERY_SCHEDULED,
             'notes'        => $this->notes,
             'confirmation_notes' => $this->confirmation_notes,
             'final_amount' => $this->final_amount !== null ? Money::format($this->final_amount, $this->currency) : null,

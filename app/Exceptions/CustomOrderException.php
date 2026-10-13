@@ -59,6 +59,14 @@ class CustomOrderException extends ApiException
     }
 
     /**
+     * Instant delivery is switched off (same setting and message as checkout).
+     */
+    public static function instantUnavailable(): self
+    {
+        return new self('checkout.instant_unavailable', 422);
+    }
+
+    /**
      * Alternatives can only be suggested while the shopper is working on the
      * order (accepted / in progress).
      */

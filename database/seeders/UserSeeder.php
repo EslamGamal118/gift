@@ -15,15 +15,8 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // حساب المدير الثابت للدخول أثناء التطوير
-        User::create([
-            'name' => 'مدير النظام',
-            'phone' => '966500000000',
-            'email' => 'admin@gift.test',
-            'user_type' => 'admin',
-            'status' => 'active',
-            'phone_verified_at' => now(),
-        ]);
+        // حساب المدير الثابت للدخول أثناء التطوير (ولوحة التحكم /admin)
+        $this->call(AdminUserSeeder::class);
 
         // عميل ثابت للاختبار
         User::create([

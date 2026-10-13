@@ -83,6 +83,7 @@ class ReviewFeedService
     {
         $query = Review::query()
             ->where('reviewable_type', Review::TYPE_CUSTOM_ORDER)
+            ->where('is_visible', true)   // hidden by the admin
             ->whereIn('reviewable_id', CustomOrder::query()->where('shopper_id', $shopper->id)->select('id'));
 
         return [

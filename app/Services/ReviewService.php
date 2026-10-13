@@ -119,14 +119,51 @@ class ReviewService
     }
 
     /**
-     * A personal shopper's rating: the shopper rating of their reviewed custom orders.
+     * Is the review shown publicly? A store order review is moderated on its
+     * store_reviews copy (shown on the store page); a custom order review on
+     * reviews.is_visible. Null when a store order review has no copy yet.
      */
-    protected function recalculateShopper(int $shopperId): void
+    public function isVisible(Review $review): ?bool
+    {
+        if ($review->reviewable_type === Review::TYPE_CUSTOM_ORDER) {
+            return (bool) $review->is_visible;
+        }
+
+        $visible = StoreReview::query()->where('order_id', $review->reviewable_id)->value('is_visible');
+
+        return $visible === null ? null : (bool) $visible;
+    }
+
+    /**
+     * Admin moderation: show or hide a review, and refresh the rating it counts in.
+     */
+    public function setVisibility(Review $review, bool $visible): void
+    {
+        if ($review->reviewable_type === Review::TYPE_CUSTOM_ORDER) {
+            $review->update(['is_visible' => $visible]);
+
+            if ($shopperId = CustomOrder::query()->whereKey($review->reviewable_id)->value('shopper_id')) {
+                $this->recalculateShopper($shopperId);
+            }
+
+            return;
+        }
+
+        // The store's rating is recalculated by StoreReview's model events
+        StoreReview::query()->where('order_id', $review->reviewable_id)->firstOrFail()->update(['is_visible' => $visible]);
+    }
+
+    /**
+     * A personal shopper's rating: the shopper rating of their reviewed custom
+     * orders that are not hidden by the admin.
+     */
+    public function recalculateShopper(int $shopperId): void
     {
         $this->storeAggregate(
             ShopperProfile::query()->where('user_id', $shopperId),
             Review::query()
                 ->where('reviewable_type', Review::TYPE_CUSTOM_ORDER)
+                ->where('is_visible', true)   // reviews hidden by the admin don't count
                 ->whereIn('reviewable_id', fn ($query) => $query->select('id')->from('custom_orders')->where('shopper_id', $shopperId)),
             'store_rating',
         );

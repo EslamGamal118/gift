@@ -79,7 +79,7 @@ return [
             ],
             'delivery' => [
                 'title' => 'Fast Delivery',
-                'text'  => 'We deliver your gift quickly and with care to your loved ones, with step-by-step order tracking.',
+                'text'  => 'Enjoy fast delivery for your heartfelt gift — quick, reliable arrival right on time.',
             ],
         ],
     ],

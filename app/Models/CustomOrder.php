@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -55,6 +56,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * @property string|null $delivery_latitude
  * @property string|null $delivery_longitude
  * @property Carbon|null $delivery_at
+ * @property string $delivery_type  scheduled | instant (Cart::DELIVERY_TYPES)
  * @property Carbon|null $delivery_date
  * @property int|null $delivery_slot_id
  * @property string|null $delivery_slot_label
@@ -248,6 +250,7 @@ class CustomOrder extends Model implements Payable
         'delivery_latitude',
         'delivery_longitude',
         'delivery_at',
+        'delivery_type',
         'delivery_date',
         'delivery_slot_id',
         'delivery_slot_label',
@@ -400,6 +403,14 @@ class CustomOrder extends Model implements Payable
     /**
      * The customer's review once the order is finished (one per order).
      */
+    /**
+     * The payout that settled this order with the shopper (admin ledger).
+     */
+    public function payoutItem(): HasOne
+    {
+        return $this->hasOne(ShopperPayoutItem::class);
+    }
+
     public function review(): MorphOne
     {
         return $this->morphOne(Review::class, 'reviewable');
@@ -636,6 +647,11 @@ class CustomOrder extends Model implements Payable
     public function hasDeliveryAddress(): bool
     {
         return $this->delivery_city !== null && $this->delivery_address !== null;
+    }
+
+    public function isInstantDelivery(): bool
+    {
+        return $this->delivery_type === Cart::DELIVERY_INSTANT;
     }
 
     public function hasDeliverySlot(): bool

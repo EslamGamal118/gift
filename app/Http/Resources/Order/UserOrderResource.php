@@ -30,6 +30,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `remaining_items_count` / `remaining_items_label` ("+2"), and `actions`
  * (the card's buttons, the primary one first: track / pay / details).
  *
+ * Store fields (both types, null for custom orders): `store_name`,
+ * `store_logo` (full URL) and `store_address` (the main branch's address,
+ * else its city).
+ *
  * Expects the models from UserOrderService (relations loaded, `order_type` set).
  *
  * @mixin Order|CustomOrder
@@ -48,7 +52,7 @@ class UserOrderResource extends JsonResource
 
         $card = $type === UserOrderService::TYPE_CUSTOM ? $this->customCard() : $this->standardCard();
 
-        return [
+        return array_merge([
             'order_type'   => $type,
             'id'           => $this->id,
             'order_number' => $this->order_number,
@@ -61,10 +65,10 @@ class UserOrderResource extends JsonResource
                 'label' => $this->badgeLabel($type),
                 'tone'  => self::tone($this->status),
             ],
-        ] + $card + $this->display($type) + [
+        ], $card, $this->display($type), [
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
-        ];
+        ]);
     }
 
     /**
@@ -76,6 +80,27 @@ class UserOrderResource extends JsonResource
             'city'        => $this->addressPart($this->shipping_city),
             'district'    => $this->addressPart($this->shipping_district),
             'items_count' => $this->items->count(),
+        ] + $this->storeFields();
+    }
+
+    /**
+     * The store the order was placed with: name, logo (full URL) and the
+     * address of its main branch. All null for custom orders (no store), or
+     * when the store / its main branch is missing.
+     *
+     * @return array{store_name: ?string, store_logo: ?string, store_address: ?string}
+     */
+    protected function storeFields(): array
+    {
+        $store = $this->resource instanceof Order ? $this->storeProfile : null;
+        $branch = $store?->mainBranch;
+        $city = $this->addressPart($branch?->city);
+
+        return [
+            'store_name'    => $store?->store_name,
+            'store_logo'    => $this->fileUrl($store?->logo),
+            'store_address' => $this->addressPart($branch?->address)
+                ?? ($city !== null ? (City::find(strtolower($city))?->name() ?? $city) : null),
         ];
     }
 
@@ -90,7 +115,7 @@ class UserOrderResource extends JsonResource
             'shopper'     => $this->shopperCard(),
             'budget'      => $this->budget(),
             'items_count' => $this->items->count(),
-        ];
+        ] + $this->storeFields();
     }
 
    /**

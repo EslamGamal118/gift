@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * @property int         $id
@@ -25,7 +27,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class ShopperProfile extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
+
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUSES = [self::STATUS_DRAFT, self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED];
 
     /**
      * The attributes that are mass assignable.
@@ -51,6 +63,11 @@ class ShopperProfile extends Model
         'status',
         'submitted_at',
         'rejection_reason',
+        'city',
+        'commission_rate',
+        'suspension_reason',
+        'suspended_at',
+        'admin_notes',
     ];
 
     /**
@@ -65,6 +82,8 @@ class ShopperProfile extends Model
         'rating_count' => 'integer',
         'is_available' => 'boolean',
         'submitted_at' => 'datetime',
+        'commission_rate' => 'decimal:2',
+        'suspended_at' => 'datetime',
     ];
 
     /**
@@ -90,6 +109,120 @@ class ShopperProfile extends Model
     public function customOrders(): HasMany
     {
         return $this->hasMany(CustomOrder::class, 'shopper_id', 'user_id');
+    }
+
+    /**
+     * Customer reviews of the shopper (one per reviewed custom order).
+     */
+    public function reviews(): HasManyThrough
+    {
+        return $this->hasManyThrough(Review::class, CustomOrder::class, 'shopper_id', 'reviewable_id', 'user_id', 'id')
+            ->where('reviews.reviewable_type', Review::TYPE_CUSTOM_ORDER);
+    }
+
+    /**
+     * Money transferred to the shopper (admin payout ledger).
+     */
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(ShopperPayout::class);
+    }
+
+    /**
+     * Financial totals and order counts as subselects (one query for a whole list):
+     * - unsettled_*: paid, non-cancelled custom orders not paid out yet
+     * - due_*: those of them completed (payable now)
+     * - settled_*: amounts frozen when orders were paid out
+     * Read them through financials().
+     */
+    public function scopeWithFinancials(Builder $query): Builder
+    {
+        $orders = fn ($q) => $q->from('custom_orders')->whereColumn('custom_orders.shopper_id', 'shopper_profiles.user_id');
+
+        $unsettled = fn ($q) => $orders($q)
+            ->where('custom_orders.payment_status', CustomOrder::PAYMENT_PAID)
+            ->where('custom_orders.status', '!=', CustomOrder::STATUS_CANCELLED)
+            ->whereNotExists(fn ($items) => $items->from('shopper_payout_items')->whereColumn('shopper_payout_items.custom_order_id', 'custom_orders.id'));
+
+        $due = fn ($q) => $unsettled($q)->where('custom_orders.status', CustomOrder::STATUS_COMPLETED);
+
+        $fee = 'COALESCE(SUM(custom_orders.shopper_fees), 0)';
+        $items = 'COALESCE(SUM(GREATEST(COALESCE(custom_orders.final_amount, 0) - COALESCE(custom_orders.shopper_fees, 0), 0)), 0)';
+
+        $settled = fn (string $column) => fn ($q) => $q->from('shopper_payout_items')
+            ->join('shopper_payouts', 'shopper_payouts.id', '=', 'shopper_payout_items.shopper_payout_id')
+            ->whereColumn('shopper_payouts.shopper_profile_id', 'shopper_profiles.id')
+            ->selectRaw("COALESCE(SUM(shopper_payout_items.{$column}), 0)");
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('shopper_profiles.*');
+        }
+
+        return $query
+            ->selectSub(fn ($q) => $orders($q)->where('custom_orders.status', '!=', CustomOrder::STATUS_DRAFT)->selectRaw('COUNT(*)'), 'assigned_orders_count')
+            ->selectSub(fn ($q) => $orders($q)->where('custom_orders.status', CustomOrder::STATUS_COMPLETED)->selectRaw('COUNT(*)'), 'completed_orders_count')
+            ->selectSub(fn ($q) => $unsettled($q)->selectRaw($fee), 'unsettled_fee')
+            ->selectSub(fn ($q) => $due($q)->selectRaw($fee), 'due_fee')
+            ->selectSub(fn ($q) => $due($q)->selectRaw($items), 'due_items_cost')
+            ->selectSub(fn ($q) => $due($q)->selectRaw('COUNT(*)'), 'due_orders_count')
+            ->selectSub($settled('shopper_fee'), 'settled_fee')
+            ->selectSub($settled('commission_amount'), 'settled_commission')
+            ->selectSub(fn ($q) => $q->from('shopper_payouts')->whereColumn('shopper_payouts.shopper_profile_id', 'shopper_profiles.id')->selectRaw('COALESCE(SUM(amount), 0)'), 'transferred_total');
+    }
+
+    /**
+     * Earnings and balances. The shopper earns their fee minus the platform
+     * commission; the items they bought are reimbursed in full on top. Orders
+     * not paid out yet use the current rate; paid-out ones keep their frozen amounts.
+     *
+     * @return array{assigned_orders: int, completed_orders: int, net_earnings: float, commission: float, available: float, due_orders_count: int, transferred: float}
+     */
+    public function financials(): array
+    {
+        $shopper = array_key_exists('due_fee', $this->getAttributes())
+            ? $this
+            : static::withTrashed()->withFinancials()->findOrFail($this->getKey());
+
+        $rate = (float) $this->commission_rate / 100;
+        $unsettledFee = (float) $shopper->unsettled_fee;
+
+        return [
+            'assigned_orders' => (int) $shopper->assigned_orders_count,
+            'completed_orders' => (int) $shopper->completed_orders_count,
+            'net_earnings' => round((float) $shopper->settled_fee - (float) $shopper->settled_commission + $unsettledFee * (1 - $rate), 2),
+            'commission' => round((float) $shopper->settled_commission + $unsettledFee * $rate, 2),
+            'available' => round((float) $shopper->due_items_cost + (float) $shopper->due_fee * (1 - $rate), 2),
+            'due_orders_count' => (int) $shopper->due_orders_count,
+            'transferred' => round((float) $shopper->transferred_total, 2),
+        ];
+    }
+
+    /**
+     * What one custom order is worth to the shopper at the current commission rate.
+     *
+     * @return array{items_cost: float, shopper_fee: float, commission_amount: float, shopper_amount: float}
+     */
+    public function shareOf(CustomOrder $order): array
+    {
+        $fee = round((float) $order->shopper_fees, 2);
+        $itemsCost = round(max((float) $order->final_amount - $fee, 0), 2);
+        $commission = round($fee * (float) $this->commission_rate / 100, 2);
+
+        return [
+            'items_cost' => $itemsCost,
+            'shopper_fee' => $fee,
+            'commission_amount' => $commission,
+            'shopper_amount' => round($itemsCost + $fee - $commission, 2),
+        ];
+    }
+
+    /**
+     * Suspended = the owner account is blocked: the shopper disappears from the
+     * app (scopeVisible) and cannot sign in.
+     */
+    public function isSuspended(): bool
+    {
+        return $this->user?->status === 'blocked';
     }
 
     /**

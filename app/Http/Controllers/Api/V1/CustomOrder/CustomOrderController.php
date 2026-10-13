@@ -98,7 +98,8 @@ class CustomOrderController extends Controller
      * POST /api/v1/custom-orders/{customOrder}/confirm
      *
      * Step 3: delivery address (`address_id` or inline `address`), delivery
-     * time (`delivery_at`, or `delivery_date` + `delivery_slot_id`) and
+     * timing as at checkout (`delivery_type` instant | scheduled, with
+     * `delivery_date` + `delivery_slot_id` when scheduled) and
      * `confirmation_notes`. The draft becomes pending and the chosen shopper
      * is notified - or, in bidding mode, the round opens for offers.
      */

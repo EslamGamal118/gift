@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\CustomOrderException;
+use App\Models\Cart;
 use App\Models\CustomOrder;
 use App\Models\CustomOrderItem;
 use App\Models\DeliverySlot;
@@ -33,6 +34,7 @@ class CustomOrderService
 
     public function __construct(
         protected NotificationService $notifications,
+        protected DeliverySchedulingService $scheduling,
     ) {
     }
 
@@ -535,9 +537,13 @@ class CustomOrderService
     }
 
     /**
-     * Snapshot of when to deliver: an exact `delivery_at`, or a
-     * `delivery_date` + `delivery_slot_id` whose window is stored like the
-     * store orders do. The slot must start inside the configured lead window.
+     * Snapshot of when to deliver, chosen as at checkout (`delivery_type`):
+     *
+     *   instant    today, within the instant ETA window (checkout's
+     *              `checkout.delivery.instant` setting must be enabled)
+     *   scheduled  a `delivery_date` + `delivery_slot_id`, whose window is
+     *              stored like the store orders do; the slot must start inside
+     *              the custom orders' lead window
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
@@ -546,16 +552,23 @@ class CustomOrderService
      */
     protected function deliverySchedule(array $data): array
     {
-        if (! isset($data['delivery_slot_id'])) {
-            $at = Carbon::createFromFormat('Y-m-d H:i', $data['delivery_at'])->startOfMinute();
+        if (($data['delivery_type'] ?? null) === Cart::DELIVERY_INSTANT) {
+            $now = $this->scheduling->now();
+
+            if (! $this->scheduling->isInstantAvailable(null, $now)) {
+                throw CustomOrderException::instantUnavailable();
+            }
+
+            $eta = $this->scheduling->instantEta();
 
             return [
-                'delivery_at'           => $at,
-                'delivery_date'         => $at->toDateString(),
+                'delivery_type'         => Cart::DELIVERY_INSTANT,
+                'delivery_at'           => $now->copy()->addMinutes($eta['min']),
+                'delivery_date'         => $now->toDateString(),
                 'delivery_slot_id'      => null,
                 'delivery_slot_label'   => null,
-                'delivery_window_start' => null,
-                'delivery_window_end'   => null,
+                'delivery_window_start' => $now->copy()->addMinutes($eta['min']),
+                'delivery_window_end'   => $now->copy()->addMinutes($eta['max']),
             ];
         }
 
@@ -578,6 +591,7 @@ class CustomOrderService
         }
 
         return [
+            'delivery_type'         => Cart::DELIVERY_SCHEDULED,
             'delivery_at'           => $start,
             'delivery_date'         => $day->toDateString(),
             'delivery_slot_id'      => $slot->id,

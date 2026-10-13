@@ -2,9 +2,10 @@
 
 namespace App\Http\Requests\CustomOrder;
 
+use App\Http\Requests\Checkout\Concerns\ValidatesDeliverySelection;
 use App\Http\Requests\CustomOrder\Concerns\ValidatesDeliveryAddress;
+use App\Models\Cart;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * Step 3: confirm a draft custom order with its delivery details.
@@ -12,15 +13,17 @@ use Illuminate\Validation\Rule;
  * POST /custom-orders/{id}/confirm
  *
  *   address_id | address[...]     where to deliver (see ValidatesDeliveryAddress)
- *   delivery_at                   "Y-m-d H:i" exact time within the lead window  - or -
- *   delivery_date + delivery_slot_id   a day ("Y-m-d") and one of the delivery slots
+ *   delivery_type                 instant | scheduled (or `instant: true`), as in POST /checkout/place-order
+ *   delivery_date + delivery_slot_id   a day ("Y-m-d") and one of the delivery slots (scheduled only)
  *   confirmation_notes            delivery instructions for the shopper
  *
- * Slot availability (lead time / scheduling window) is checked by the service.
+ * The delivery fields follow the checkout rules (ValidatesDeliverySelection).
+ * Availability (instant enabled, the slot inside the lead window) is checked
+ * by the service.
  */
 class ConfirmCustomOrderRequest extends FormRequest
 {
-    use ValidatesDeliveryAddress;
+    use ValidatesDeliveryAddress, ValidatesDeliverySelection;
 
     public function authorize(): bool
     {
@@ -36,13 +39,14 @@ class ConfirmCustomOrderRequest extends FormRequest
         }
 
         // Blank values from forms mean "not chosen"
-        foreach (['delivery_at', 'delivery_date', 'delivery_slot_id'] as $field) {
+        foreach (['delivery_date', 'delivery_slot_id'] as $field) {
             if ($this->input($field) === '') {
                 $merge[$field] = null;
             }
         }
 
         $this->merge($merge);
+        $this->normaliseDeliveryType();
     }
 
     /**
@@ -50,49 +54,40 @@ class ConfirmCustomOrderRequest extends FormRequest
      */
     public function rules(): array
     {
-        $delivery = config('custom_orders.delivery');
-
-        $earliest = now()->addMinutes((int) $delivery['min_lead_minutes'])->format('Y-m-d H:i:s');
-        $latest   = now()->addDays((int) $delivery['max_lead_days'])->format('Y-m-d H:i:s');
-
-        return $this->addressRules(required: true) + [
-            // Delivery schedule: an exact time, or a date + slot
-            'delivery_at'      => ['nullable', 'required_without:delivery_slot_id', 'date_format:Y-m-d H:i', 'after_or_equal:'.$earliest, 'before_or_equal:'.$latest],
-            'delivery_date'    => ['nullable', 'required_with:delivery_slot_id', 'date_format:Y-m-d'],
-            'delivery_slot_id' => ['nullable', 'required_without:delivery_at', 'integer', Rule::exists('delivery_slots', 'id')->where('is_active', true)],
-
+        return $this->addressRules(required: true) + $this->deliveryRules(required: true) + [
             'confirmation_notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
     /**
-     * Validated delivery details, ready for the service.
+     * Validated delivery details, ready for the service. A slot sent with
+     * instant delivery is ignored.
      *
      * @return array<string, mixed>
      */
     public function deliveryData(): array
     {
-        return $this->validated();
+        $data = $this->validated();
+
+        if ($this->deliveryType() !== Cart::DELIVERY_SCHEDULED) {
+            $data['delivery_date'] = $data['delivery_slot_id'] = null;
+        }
+
+        return $data;
     }
 
     public function attributes(): array
     {
-        $keys = [...$this->addressAttributeKeys(), 'delivery_at', 'delivery_date', 'delivery_slot_id', 'confirmation_notes'];
+        $keys = [...$this->addressAttributeKeys(), 'confirmation_notes'];
 
-        return array_combine($keys, array_map(fn ($k) => __('validation.attributes.'.$k), $keys));
+        return array_combine($keys, array_map(fn ($k) => __('validation.attributes.'.$k), $keys)) + $this->deliveryAttributes();
     }
 
     public function messages(): array
     {
-        $delivery = config('custom_orders.delivery');
-
         return $this->addressMessages() + [
-            'address_id.required_without'       => __('custom_orders.address_required'),
-            'address.required_without'          => __('custom_orders.address_required'),
-            'delivery_at.required_without'      => __('custom_orders.delivery_required'),
-            'delivery_slot_id.required_without' => __('custom_orders.delivery_required'),
-            'delivery_at.after_or_equal'        => __('custom_orders.delivery_too_soon', ['minutes' => $delivery['min_lead_minutes']]),
-            'delivery_at.before_or_equal'       => __('custom_orders.delivery_too_far', ['days' => $delivery['max_lead_days']]),
+            'address_id.required_without' => __('custom_orders.address_required'),
+            'address.required_without'    => __('custom_orders.address_required'),
         ];
     }
 }

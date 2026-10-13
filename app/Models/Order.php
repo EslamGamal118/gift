@@ -378,6 +378,14 @@ class Order extends Model implements Payable
         return $this->belongsTo(User::class, 'captain_id');
     }
 
+    /**
+     * The payout that settled this order with the store (admin ledger).
+     */
+    public function payoutItem(): HasOne
+    {
+        return $this->hasOne(StorePayoutItem::class);
+    }
+
     public function statusHistories(): HasMany
     {
         return $this->hasMany(OrderStatusHistory::class)->orderBy('id');
@@ -437,6 +445,24 @@ class Order extends Model implements Payable
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', self::ACTIVE_STATUSES);
+    }
+
+    /**
+     * Orders the store earns from: paid, and not cancelled.
+     */
+    public function scopeEarning(Builder $query): Builder
+    {
+        return $query->paid()->whereNotIn($query->qualifyColumn('status'), [self::STATUS_CANCELLED, self::STATUS_PENDING_PAYMENT]);
+    }
+
+    /**
+     * Delivered earning orders not paid out to the store yet (its available balance).
+     */
+    public function scopeAwaitingPayout(Builder $query): Builder
+    {
+        return $query->earning()
+            ->where($query->qualifyColumn('status'), self::STATUS_DELIVERED)
+            ->whereDoesntHave('payoutItem');
     }
 
     public function scopeAwaitingPayment(Builder $query): Builder

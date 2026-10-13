@@ -71,10 +71,12 @@ class NotificationService
      * Tell the customer their order moved to its current status. The text comes
      * from ORDER_STATUS_KEYS; the data payload carries the new status, its badge
      * and the previous status so the app can update the screen in place.
+     *
+     * @param  array{0: string, 1: string}|null  $keys  overrides the text (e.g. cancelled by the admin)
      */
-    public function notifyOrderStatus(Order $order, ?string $reason = null, ?string $previousStatus = null): ?NotificationContent
+    public function notifyOrderStatus(Order $order, ?string $reason = null, ?string $previousStatus = null, ?array $keys = null): ?NotificationContent
     {
-        $keys = match (true) {
+        $keys ??= match (true) {
             // Cancelled by the delivery company, not by the store
             $order->isCancelled() && $order->cancelled_by === Order::ACTOR_DELIVERY => ['notifications.order_delivery_cancelled_title', 'notifications.order_delivery_cancelled_body'],
             isset(self::ORDER_STATUS_KEYS[$order->status]) => self::ORDER_STATUS_KEYS[$order->status],

@@ -55,7 +55,14 @@ class UserOrderService
      */
     public function listStandard(User $customer, ?string $tab, int $perPage, ?string $search = null): LengthAwarePaginator
     {
-        return $this->paginate(Order::query()->forUser($customer->id)->with('items'), self::TYPE_STANDARD, $tab, $perPage, $search);
+        $query = Order::query()->forUser($customer->id)->with([
+            'items',
+            // The card's store name, logo and address (main branch)
+            'storeProfile:store_profiles.id,store_profiles.user_id,store_name,logo',
+            'storeProfile.mainBranch:id,store_profile_id,address,city',
+        ]);
+
+        return $this->paginate($query, self::TYPE_STANDARD, $tab, $perPage, $search);
     }
 
     /**

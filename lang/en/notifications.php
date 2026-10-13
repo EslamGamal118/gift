@@ -116,4 +116,34 @@ return [
         'all_marked_read' => 'All notifications were marked as read.',
     ],
 
+    // Stores - admin decisions and payouts
+    'store_approved_title'    => 'Your store is approved',
+    'store_approved_body'     => 'Congratulations! :store_name is approved and visible to customers.',
+    'store_rejected_title'    => 'Your store was not approved',
+    'store_rejected_body'     => ':store_name was not approved. Reason: :reason',
+    'store_suspended_title'   => 'Your store is suspended',
+    'store_suspended_body'    => ':store_name has been suspended. Reason: :reason',
+    'store_reactivated_title' => 'Your store is active again',
+    'store_reactivated_body'  => ':store_name is active again and can receive orders.',
+    'store_payout_title'      => 'Payout sent',
+    'store_payout_body'       => ':amount :currency has been transferred to your account for :orders_count orders.',
+
+    // Personal shoppers - admin decisions and payouts
+    'shopper_approved_title'    => 'Your account is approved',
+    'shopper_approved_body'     => 'Your personal shopper account is approved. You can now receive custom orders.',
+    'shopper_rejected_title'    => 'Application rejected',
+    'shopper_rejected_body'     => 'Sorry, your personal shopper application was rejected. Reason: :reason',
+    'shopper_suspended_title'   => 'Your account is suspended',
+    'shopper_suspended_body'    => 'Your personal shopper account has been suspended. Reason: :reason',
+    'shopper_reactivated_title' => 'Your account is active again',
+    'shopper_reactivated_body'  => 'Your personal shopper account is active again. You can receive custom orders.',
+    'shopper_payout_title'      => 'Payout sent',
+    'shopper_payout_body'       => ':amount :currency has been transferred to your account for :orders_count orders.',
+
+    // Customer - order cancelled by the app's administration
+    'order_admin_cancelled_title'  => 'Your order :order_number was cancelled',
+    'order_admin_cancelled_body'   => 'Your order :order_number was cancelled by the app administration. Reason: :reason',
+    'custom_order_admin_cancelled_title' => 'Your order :order_number was cancelled',
+    'custom_order_admin_cancelled_body'  => 'Your custom order :order_number was cancelled by the app administration. Reason: :reason',
+
 ];

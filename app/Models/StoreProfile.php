@@ -12,12 +12,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
 class StoreProfile extends Model
 {
-    use Favoritable, HasFactory, SmartSearchable;
+    use Favoritable, HasFactory, SmartSearchable, SoftDeletes;
 
     /** Name column feeding the search typo vocabulary (SmartSearchable). */
     protected string $searchVocabularyColumn = 'store_name';
@@ -28,6 +29,16 @@ class StoreProfile extends Model
      * @var array<int, string>
      */
     public const DAYS = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUSES = [self::STATUS_DRAFT, self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_REJECTED];
 
     /**
      * The attributes that are mass assignable.
@@ -55,6 +66,10 @@ class StoreProfile extends Model
         'status',
         'submitted_at',
         'rejection_reason',
+        'commission_rate',
+        'suspension_reason',
+        'suspended_at',
+        'admin_notes',
     ];
 
     /**
@@ -70,6 +85,8 @@ class StoreProfile extends Model
         'rating_count' => 'integer',
         'is_featured' => 'boolean',
         'submitted_at' => 'datetime',
+        'commission_rate' => 'decimal:2',
+        'suspended_at' => 'datetime',
     ];
 
     /**
@@ -154,6 +171,101 @@ class StoreProfile extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(StoreReview::class);
+    }
+
+    /**
+     * Add-ons (gift extras) offered by the store's account.
+     */
+    public function addons(): HasManyThrough
+    {
+        return $this->hasManyThrough(Addon::class, User::class, 'id', 'store_id', 'user_id', 'id');
+    }
+
+    /**
+     * Money transferred to the store (admin payout ledger).
+     */
+    public function payouts(): HasMany
+    {
+        return $this->hasMany(StorePayout::class);
+    }
+
+    /**
+     * Financial totals as subselects (one query for a whole list):
+     * - earning_unsettled_subtotal: paid, non-cancelled orders not paid out yet
+     * - due_subtotal / due_orders_count: those of them already delivered (payable now)
+     * - settled_*: amounts frozen when orders were paid out
+     * - transferred_total: money transferred so far
+     * Read them through financials().
+     */
+    public function scopeWithFinancials(Builder $query): Builder
+    {
+        $unsettled = fn ($orders) => $orders->from('orders')
+            ->whereColumn('orders.store_id', 'store_profiles.user_id')
+            ->where('orders.payment_status', Order::PAYMENT_PAID)
+            ->whereNotIn('orders.status', [Order::STATUS_CANCELLED, Order::STATUS_PENDING_PAYMENT])
+            ->whereNotExists(fn ($items) => $items->from('store_payout_items')->whereColumn('store_payout_items.order_id', 'orders.id'));
+
+        $due = fn ($orders) => $unsettled($orders)->where('orders.status', Order::STATUS_DELIVERED);
+
+        $settled = fn (string $column) => fn ($items) => $items->from('store_payout_items')
+            ->join('store_payouts', 'store_payouts.id', '=', 'store_payout_items.store_payout_id')
+            ->whereColumn('store_payouts.store_profile_id', 'store_profiles.id')
+            ->selectRaw("COALESCE(SUM(store_payout_items.{$column}), 0)");
+
+        if ($query->getQuery()->columns === null) {
+            $query->select('store_profiles.*');
+        }
+
+        return $query
+            ->selectSub(fn ($q) => $unsettled($q)->selectRaw('COALESCE(SUM(orders.subtotal), 0)'), 'earning_unsettled_subtotal')
+            ->selectSub(fn ($q) => $due($q)->selectRaw('COALESCE(SUM(orders.subtotal), 0)'), 'due_subtotal')
+            ->selectSub(fn ($q) => $due($q)->selectRaw('COUNT(*)'), 'due_orders_count')
+            ->selectSub($settled('subtotal'), 'settled_subtotal')
+            ->selectSub($settled('commission_amount'), 'settled_commission')
+            ->selectSub($settled('store_amount'), 'settled_store_amount')
+            ->selectSub(fn ($q) => $q->from('store_payouts')->whereColumn('store_payouts.store_profile_id', 'store_profiles.id')->selectRaw('COALESCE(SUM(amount), 0)'), 'transferred_total');
+    }
+
+    /**
+     * Sales, commission and balances. Orders not paid out yet use the current
+     * commission rate; paid-out orders keep the amounts frozen at payout time.
+     *
+     * @return array{total_sales: float, commission: float, store_earnings: float, available: float, due_orders_count: int, transferred: float}
+     */
+    public function financials(): array
+    {
+        $store = array_key_exists('due_subtotal', $this->getAttributes())
+            ? $this
+            : static::withTrashed()->withFinancials()->findOrFail($this->getKey());
+
+        $rate = (float) $this->commission_rate / 100;
+        $unsettled = (float) $store->earning_unsettled_subtotal;
+
+        return [
+            'total_sales' => round((float) $store->settled_subtotal + $unsettled, 2),
+            'commission' => round((float) $store->settled_commission + $unsettled * $rate, 2),
+            'store_earnings' => round((float) $store->settled_store_amount + $unsettled * (1 - $rate), 2),
+            'available' => round((float) $store->due_subtotal * (1 - $rate), 2),
+            'due_orders_count' => (int) $store->due_orders_count,
+            'transferred' => round((float) $store->transferred_total, 2),
+        ];
+    }
+
+    /**
+     * Platform commission on an order subtotal at the store's current rate.
+     */
+    public function commissionFor(float $subtotal): float
+    {
+        return round($subtotal * (float) $this->commission_rate / 100, 2);
+    }
+
+    /**
+     * Suspended = the owner account is blocked: the store disappears from the
+     * app (scopeVisible) and the owner cannot sign in.
+     */
+    public function isSuspended(): bool
+    {
+        return $this->user?->status === 'blocked';
     }
 
     /**

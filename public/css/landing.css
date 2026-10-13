@@ -512,7 +512,7 @@ img {
     font-weight: 400;
     line-height: 160%;
     letter-spacing: 0;
-    color: var(--neutral-500);
+    color: var(--primary-800);
 }
 
 /* Fill 1320 × hug 263, 3 cards of 424 with 24px gaps */
@@ -570,7 +570,7 @@ img {
     font-weight: 400;
     line-height: 160%;
     letter-spacing: 0;
-    color: var(--neutral-500);
+    color: var(--primary-800);
 }
 
 /* ------------------------------ Responsive ------------------------------ */
